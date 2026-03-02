@@ -16,9 +16,9 @@ Shapes, colors, text, connectors, and layout are preserved. Text inside shapes i
 
 **Web UI — Upload, Configure & Convert**
 
-| Upload & Configure | Conversion Results |
-|:---:|:---:|
-| ![Web UI — Upload workflow](assets/demo-upload-workflow.png) | ![Web UI — Cleanup suggestions](assets/demo-cleanup-suggestions.png) |
+| Web UI - Add MIRO Board| Upload & Configure | Conversion Results |
+|:---:|:---:|:---:|
+| ![Web UI](assets/demo-web-ui.png) | ![Upload workflow](assets/demo-upload-workflow.png) | ![Cleanup suggestions](assets/demo-cleanup-suggestions.png) |
 
 Guided 4-step web interface with drag-and-drop upload, import presets, style profiles, and post-conversion cleanup suggestions.
 
