@@ -63,22 +63,22 @@ https://miro.com/app/board/uXjVN1234567=/
 
 ```bash
 # Basic usage
-excal2miro --in drawing.excalidraw --board uXjVN1234567= --token YOUR_TOKEN
+excal2miro --in drawing.excalidraw --board uXjVN1234567abcd= --token YOUR_TOKEN
 
 # With options
 excal2miro \
   --in drawing.excalidraw \
-  --board uXjVN1234567= \
+  --board uXjVN1234567abcd= \
   --token YOUR_TOKEN \
   --scale 1.5 \
   --verbose
 
 # Using environment variable for token
 export MIRO_TOKEN=YOUR_TOKEN
-excal2miro --in drawing.excalidraw --board uXjVN1234567=
+excal2miro --in drawing.excalidraw --board uXjVN1234567abcd=
 
 # Disable specific features
-excal2miro --in drawing.excalidraw --board uXjVN1234567= \
+excal2miro --in drawing.excalidraw --board uXjVN1234567abcd= \
   --no-images --no-freedraw --no-frames
 ```
 
