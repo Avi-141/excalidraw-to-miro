@@ -51,6 +51,33 @@ export interface ConversionOptions {
   convertFrames: boolean;
   /** Verbose logging */
   verbose: boolean;
+  /** Dry run — parse and map without calling the Miro API */
+  dryRun: boolean;
+}
+
+export interface PreviewElement {
+  id: string;
+  type: string;
+  status: 'will_create' | 'will_skip' | 'degraded';
+  miroType: string;
+  reason?: string;
+  fidelityNote?: string;
+}
+
+export interface PreviewResult {
+  totalElements: number;
+  willCreate: number;
+  willSkip: number;
+  degraded: number;
+  elements: PreviewElement[];
+  breakdown: {
+    shapes: number;
+    text: number;
+    connectors: number;
+    images: number;
+    freedraw: number;
+    frames: number;
+  };
 }
 
 export const DEFAULT_OPTIONS: ConversionOptions = {
@@ -64,4 +91,5 @@ export const DEFAULT_OPTIONS: ConversionOptions = {
   convertImages: true,
   convertFrames: true,
   verbose: false,
+  dryRun: false,
 };

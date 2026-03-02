@@ -7,8 +7,13 @@
     "excal2miro": "./dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cd web && npm run build",
+    "build:server": "tsc",
+    "build:web": "cd web && npm run build",
     "start": "node dist/cli.js",
+    "start:server": "node dist/server.js",
+    "dev:server": "ts-node src/server.ts",
+    "dev:web": "cd web && npm run dev",
     "dev": "ts-node src/cli.ts",
     "lint": "eslint src/**/*.ts",
     "test": "jest"
@@ -25,10 +30,16 @@
   "dependencies": {
     "axios": "^1.7.0",
     "commander": "^12.1.0",
-    "form-data": "^4.0.5"
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "form-data": "^4.0.5",
+    "multer": "^2.1.0"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
+    "@types/multer": "^2.0.0",
     "@types/node": "^20.14.0",
     "jest": "^30.2.0",
     "ts-jest": "^29.4.6",
