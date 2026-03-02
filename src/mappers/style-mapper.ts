@@ -1,6 +1,7 @@
 import {
   ExcalidrawElement,
   StrokeStyle,
+  StyleProfile,
   MiroShapeStyle,
   MiroTextStyle,
 } from '../types';
@@ -86,10 +87,9 @@ export function mapFontSize(fontSize: number): string {
 /**
  * Build Miro shape style from Excalidraw element
  */
-export function buildShapeStyle(element: ExcalidrawElement): MiroShapeStyle {
+export function buildShapeStyle(element: ExcalidrawElement, profile?: StyleProfile): MiroShapeStyle {
   const style: MiroShapeStyle = {};
 
-  // Background/fill
   if (element.backgroundColor !== 'transparent') {
     style.fillColor = mapColor(element.backgroundColor);
     style.fillOpacity = mapOpacity(element.opacity);
@@ -97,11 +97,14 @@ export function buildShapeStyle(element: ExcalidrawElement): MiroShapeStyle {
     style.fillOpacity = '0.0';
   }
 
-  // Border/stroke
   style.borderColor = mapColor(element.strokeColor);
   style.borderWidth = mapStrokeWidth(element.strokeWidth);
   style.borderStyle = mapStrokeStyle(element.strokeStyle);
   style.borderOpacity = mapOpacity(element.opacity);
+
+  if (profile && !profile.preserveOriginalStyles) {
+    applyShapeProfileOverrides(style, profile);
+  }
 
   return style;
 }
@@ -110,7 +113,8 @@ export function buildShapeStyle(element: ExcalidrawElement): MiroShapeStyle {
  * Build Miro text style from Excalidraw text element
  */
 export function buildTextStyle(
-  element: ExcalidrawElement & { fontSize?: number; fontFamily?: number }
+  element: ExcalidrawElement & { fontSize?: number; fontFamily?: number },
+  profile?: StyleProfile
 ): MiroTextStyle {
   const style: MiroTextStyle = {};
 
@@ -124,5 +128,28 @@ export function buildTextStyle(
     style.fontFamily = mapFontFamily(element.fontFamily);
   }
 
+  if (profile && !profile.preserveOriginalStyles) {
+    applyTextProfileOverrides(style, profile);
+  }
+
   return style;
+}
+
+function applyShapeProfileOverrides(style: MiroShapeStyle, profile: StyleProfile): void {
+  const o = profile.overrides;
+  if (o.fillColor) style.fillColor = o.fillColor;
+  if (o.fillOpacity) style.fillOpacity = o.fillOpacity;
+  if (o.borderColor) style.borderColor = o.borderColor;
+  if (o.borderWidth) style.borderWidth = o.borderWidth;
+  if (o.borderStyle) style.borderStyle = o.borderStyle;
+  if (o.fontFamily) style.fontFamily = o.fontFamily;
+  if (o.fontSize) style.fontSize = o.fontSize;
+  if (o.textColor) style.color = o.textColor;
+}
+
+function applyTextProfileOverrides(style: MiroTextStyle, profile: StyleProfile): void {
+  const o = profile.overrides;
+  if (o.textColor) style.color = o.textColor;
+  if (o.fontFamily) style.fontFamily = o.fontFamily;
+  if (o.fontSize) style.fontSize = o.fontSize;
 }

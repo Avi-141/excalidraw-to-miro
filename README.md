@@ -14,14 +14,21 @@ Convert Excalidraw drawings to editable Miro board objects via the Miro REST API
 
 Shapes, colors, text, connectors, and layout are preserved. Text inside shapes is automatically merged into shape content rather than created as separate overlapping items.
 
-**Web UI**
+**Web UI — Upload & Configure**
 
-![Web UI](assets/demo-web-ui.png)
+![Web UI — Upload workflow](assets/demo-upload-workflow.png)
 
-A guided web interface with import preview, presets, and shareable summary cards.
+A guided web interface with drag-and-drop upload, import presets, and style profiles.
+
+**Web UI — Conversion Results & Cleanup Suggestions**
+
+![Web UI — Cleanup suggestions](assets/demo-cleanup-suggestions.png)
+
+After conversion, actionable cleanup suggestions highlight elements that may need manual review on the Miro board.
 
 ## Features
 
+### Core Conversion
 - **Shapes**: Rectangles, ellipses, and diamonds become editable Miro shapes
 - **Text**: Standalone text and text bound to shapes
 - **Connectors**: Arrows and lines become Miro connectors with proper endpoint binding
@@ -31,11 +38,25 @@ A guided web interface with import preview, presets, and shareable summary cards
 - **Styles**: Stroke colors, fill colors, border styles, and opacity
 - **Auto-centering**: Content is automatically centered on the Miro board
 - **Smart snapping**: Unbound arrow endpoints snap to nearby shapes
+- **Table layout detection**: Wide background shapes (table rows, banners) are kept separate from overlapping text, preserving grid/column layouts
 
-- **Web UI**: Guided 4-step import flow with drag-and-drop upload
+### Web UI
+- **Guided 4-step flow**: Connect, Upload, Preview, and Convert with drag-and-drop
 - **Import Preview**: See exactly what will be created, skipped, or degraded before writing to Miro
 - **Presets**: Architecture Diagram, Workshop Board, and Product Flow import presets
+- **Style Profiles**: Apply Corporate Clean, Design System, or Sketch visual overrides
+- **Cleanup Suggestions**: Post-conversion actionable feedback for elements that may need manual review
 - **Summary Card**: Copy a Markdown summary to share in Slack, Notion, or Jira
+
+### CLI
+- **Multiple commands**: `convert`, `preview`, `guided`, `batch`, `repair`
+- **Output formats**: Text, Markdown, and JSON output for summaries and previews
+- **Interactive guided mode**: Step-by-step wizard with readline prompts for beginners
+- **Batch import**: Import multiple `.excalidraw` files from a directory (supports Obsidian vaults)
+- **Connector repair**: Interactive flow to re-establish broken connectors from a previous import
+- **Smart re-import**: `create`, `update`, and `upsert` modes with persistent ID mapping across runs
+- **Style profiles**: Built-in and custom JSON profiles for visual overrides
+- **Metadata preservation**: Excalidraw `link` and `customData` fields carry over into Miro item content
 
 ## Installation
 
@@ -92,27 +113,37 @@ For production, `npm run build` compiles everything, then `npm run start:server`
 ### CLI
 
 ```bash
-# Basic usage
-excal2miro --in drawing.excalidraw --board uXjVN1234567abcd= --token YOUR_TOKEN
+# Basic conversion
+excal2miro convert --in drawing.excalidraw --board uXjVN1234567abcd= --token YOUR_TOKEN
 
 # With options
-excal2miro \
+excal2miro convert \
   --in drawing.excalidraw \
   --board uXjVN1234567abcd= \
   --token YOUR_TOKEN \
   --scale 1.5 \
+  --output-format markdown \
   --verbose
+
+# Dry-run preview
+excal2miro preview --in drawing.excalidraw
+
+# Interactive guided mode
+excal2miro guided
+
+# Batch import from a directory (Obsidian vault support)
+excal2miro batch --dir ./vault --board uXjVN1234567abcd= --token YOUR_TOKEN
+
+# Smart re-import (update existing items)
+excal2miro convert --in drawing.excalidraw --board uXjVN1234567abcd= \
+  --token YOUR_TOKEN --import-mode upsert --mapping-file mapping.json
 
 # Using environment variable for token
 export MIRO_TOKEN=YOUR_TOKEN
-excal2miro --in drawing.excalidraw --board uXjVN1234567abcd=
-
-# Disable specific features
-excal2miro --in drawing.excalidraw --board uXjVN1234567abcd= \
-  --no-images --no-freedraw --no-frames
+excal2miro convert --in drawing.excalidraw --board uXjVN1234567abcd=
 ```
 
-### Options
+### Options (convert command)
 
 | Option | Description | Default |
 |--------|-------------|---------|
@@ -123,6 +154,11 @@ excal2miro --in drawing.excalidraw --board uXjVN1234567abcd= \
 | `--offset-x <number>` | X offset on Miro board | `0` (auto-center) |
 | `--offset-y <number>` | Y offset on Miro board | `0` (auto-center) |
 | `--snap-threshold <number>` | Distance for snapping arrows to shapes | `50` |
+| `--preset <name>` | Use a preset (flowchart, architecture, wireframe, mindmap) | - |
+| `--style-profile <path>` | Path to a JSON style profile | - |
+| `--import-mode <mode>` | Import mode: `create`, `update`, or `upsert` | `create` |
+| `--mapping-file <path>` | Path to ID mapping file for re-imports | - |
+| `--output-format <fmt>` | Output format: `text`, `markdown`, or `json` | `text` |
 | `--no-connectors` | Skip creating connectors from arrows | `false` |
 | `--no-images` | Skip converting embedded images | `false` |
 | `--no-freedraw` | Skip converting freedraw to SVG | `false` |
@@ -164,7 +200,7 @@ console.log(`Freedraw converted: ${result.freedrawConverted}`);
 | `ellipse` | Shape (circle) |
 | `diamond` | Shape (rhombus) |
 | `text` | Text item (or merged into parent shape) |
-I| `arrow` | Connector |
+| `arrow` | Connector |
 | `line` | Connector |
 | `freedraw` | Image (SVG conversion) |
 | `image` | Image (uploaded from embedded data) |
@@ -175,6 +211,7 @@ I| `arrow` | Connector |
 Text elements are handled intelligently:
 
 - **Text inside shapes**: If a standalone text element's center falls within a shape's bounds, it is merged into the shape's content rather than created as a separate overlapping text item. Multiple texts in the same shape are joined with line breaks, ordered top-to-bottom.
+- **Table layout detection**: Shapes with a wide aspect ratio (> 6:1) are recognized as table rows or background strips. Their overlapping text elements are kept as independent items at their original positions, preserving column/grid layouts.
 - **Bound text**: Text with a `containerId` is automatically included in the parent shape (standard Excalidraw binding).
 - **Standalone text**: Text that doesn't overlap any shape is created as a separate Miro text item.
 

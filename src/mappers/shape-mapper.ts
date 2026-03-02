@@ -51,10 +51,8 @@ export function mapShape(
   element: ExcalidrawRectangle | ExcalidrawEllipse | ExcalidrawDiamond,
   options: ConversionOptions
 ): MiroCreateShapeRequest {
-  // Transform coordinates from Excalidraw to Miro
-  // Excalidraw uses top-left origin, Miro uses center origin for shapes
   const { x, y } = transformCoordinates(
-    element.x + element.width / 2, // Convert to center
+    element.x + element.width / 2,
     element.y + element.height / 2,
     options
   );
@@ -72,7 +70,7 @@ export function mapShape(
       width: element.width * options.scale,
       height: element.height * options.scale,
     },
-    style: buildShapeStyle(element),
+    style: buildShapeStyle(element, options.styleProfile),
   };
 
   // Handle rotation (Excalidraw uses radians, Miro uses degrees)

@@ -11,141 +11,143 @@ The tool converts Excalidraw drawings to editable Miro board objects. Users get:
 - Unbound arrows snapped to nearby shapes
 - Content auto-centered on the Miro board
 - Feature flags to skip element types
-
-What users don't get: any preview before import, any post-import repair, any way to re-import without duplicating, or any guidance during setup.
+- Preview before import with element-by-element breakdown and fidelity indicators
+- Shareable summary card (Markdown, plain text, JSON) with board link
+- Named presets for architecture, workshop, and product-flow diagrams
+- Interactive guided import for first-time users
+- Post-import cleanup suggestions with actionable guidance
+- Metadata preservation (links and custom data carried into Miro)
+- Team style profiles to normalize visual aesthetics across imports
+- Smart re-import with update/upsert modes and ID mapping persistence
+- Interactive connector repair for skipped connectors
+- Obsidian `.excalidraw.md` file support and batch import from directories
 
 ---
 
-## Near-Term: Trust and First-Run Delight (0-2 months)
+## Implemented: Near-Term Features
 
-### Import Preview
+### Import Preview : Done
 
-Before writing anything to Miro, show users exactly what will happen.
+Before writing anything to Miro, users see exactly what will happen.
 
 - Element-by-element breakdown: what will be created, what will be skipped, and why
-- Human-readable summary printed to terminal
+- Human-readable summary via `excal2miro preview` CLI command
 - Machine-readable JSON output for automation (`--output-format json`)
 - Fidelity indicators per element type (e.g., "freedraw will be converted to static SVG image, not editable strokes")
+- Web UI preview step with summary cards (Will Create / Degraded / Will Skip) and attention list
 
-**Why users care**: The tool writes irreversibly to a Miro board. Users need to see what they're getting before committing. This is the single biggest trust-builder for first-time users.
+**Implementation**: `excal2miro preview -i file.excalidraw --output-format json|text`, `/api/preview` endpoint, web UI step 3.
 
-**Success metric**: First-time successful import rate >= 90%.
+### Shareable Import Summary Card : Done
 
-### Shareable Import Summary Card
-
-After conversion, generate a formatted summary users can paste into Slack, Notion, or Jira.
+After conversion, users get a formatted summary they can paste into Slack, Notion, or Jira.
 
 - Counts: shapes, text, connectors, images, frames created
 - Skipped elements with reasons
+- Cleanup suggestions with severity and actionable guidance
 - Direct link to the Miro board
-- Output as Markdown, plain text, or JSON
+- Output as Markdown, plain text, or JSON via `--output-format`
+- Web UI "Copy Summary" button
 
-**Why users care**: Teams need to communicate that a migration happened and what the result was. Today users get terminal output they can't easily share.
+**Implementation**: CLI `--output-format markdown|json|text`, web UI `buildSummaryCard()` with clipboard copy.
 
-**Success metric**: Summary card copied/shared in >= 30% of conversions.
-
-### Presets for Common Use Cases
+### Presets for Common Use Cases : Done
 
 Named configuration bundles that tune import behavior for specific diagram types.
 
-- "Architecture Diagram": prioritize connector fidelity, enable smart snapping, strict style mapping
-- "Workshop Board": looser layout, skip freedraw simplification, preserve hand-drawn feel
-- "Product Flow": merge text aggressively, normalize sizes, auto-frame detection
+- "Architecture Diagram": prioritize connector fidelity, enable smart snapping (`snapThreshold: 80`)
+- "Workshop Board": preserve hand-drawn feel, looser layout (`snapThreshold: 30`)
+- "Product Flow": skip freedraw, focus on structure (`snapThreshold: 50`)
 
-**Why users care**: The current CLI has 10+ flags. Most users want to say "I'm importing an architecture diagram" rather than figure out `--snap-threshold 80 --no-freedraw`.
+**Implementation**: CLI `--preset architecture|workshop|product-flow`, `/api/presets` endpoint, web UI preset selector grid.
 
-**Success metric**: >= 40% of imports use a preset instead of manual flags.
-
-### Beginner-Friendly Guided Import
+### Beginner-Friendly Guided Import : Done
 
 Interactive CLI flow for users who don't know all the flags.
 
-- Prompt for Miro token (with link to developer portal) if not provided
-- Board selection from available boards (via API) instead of requiring the ID
-- Preset selection from menu
-- Confirmation before executing
+- Prompt for file path with existence validation
+- Prompt for Miro token (with link to developer portal) if `MIRO_TOKEN` env not set
+- Board ID input with URL format hint
+- Preset selection from numbered menu
+- Preview shown before execution with confirmation prompt
 
-**Why users care**: The current CLI requires three pieces of information (file path, board ID, token) that non-developers may struggle to assemble. A guided flow reduces setup friction.
+**Implementation**: `excal2miro guided` command using `readline` prompts.
 
-**Success metric**: Time-to-first-usable-board reduced by 40%.
+### One-Click Cleanup Suggestions : Done
 
-### One-Click Cleanup Suggestions
+After import, the tool reports what could be improved with actionable next steps.
 
-After import, report what could be improved and offer actionable next steps.
+- Skipped connectors listed with nearby shapes identified (within 300px radius)
+- Orphan text flagged (standalone text not near any shape)
+- Rotated frames flagged with degree of lost rotation
+- Freedraw fidelity note (static SVG, not editable strokes)
+- Severity levels: action (fix needed), warning (review), info (awareness)
+- Category tags: connector, text, fidelity, layout
 
-- List skipped connectors with why they were skipped and which shapes they were near
-- Identify orphan text (text that wasn't merged into any shape)
-- Flag elements with degraded fidelity (e.g., rotated frames imported without rotation)
-- Suggest Miro board link to the area where skipped elements should have been
-
-**Why users care**: Today the tool reports skipped elements as a count. Users need to know what to do about them.
-
-**Success metric**: Median post-import manual cleanup time reduced by 30%.
+**Implementation**: `CleanupSuggestion` type, `generateCleanupSuggestions()` in converter, web UI cleanup section in result step, CLI formatters include suggestions.
 
 ---
 
-## Mid-Term: Repeat Collaboration Workflows (2-6 months)
+## Implemented: Mid-Term Features
 
-### Smart Re-Import for Living Diagrams
+### Smart Re-Import for Living Diagrams : Done
 
 Update an existing Miro board from a newer version of the same Excalidraw file without recreating everything.
 
-- Persist Excalidraw-to-Miro ID mappings between runs
-- Modes: `create` (default, current behavior), `update` (modify existing items), `upsert` (create new, update existing)
-- Detect deleted elements and optionally remove from Miro
-- Show diff summary before applying changes
+- Persist Excalidraw-to-Miro ID mappings via `--mapping-file` (JSON file with board ID, timestamp, and ID map)
+- Modes: `create` (default), `update` (modify existing only), `upsert` (create new + update existing)
+- In update mode: skip elements without existing mapping; skip elements whose Miro item was deleted
+- In upsert mode: update existing items, create new ones that don't have a mapping
+- Mappings auto-saved after each conversion
 
-**Why users care**: This is the biggest workflow unlock. Today, re-importing duplicates everything. Teams with iterative design reviews need to update, not rebuild.
+**Implementation**: CLI `--import-mode create|update|upsert --mapping-file state.json`, Miro client `updateShape()`, `updateText()`, `itemExists()`, `deleteItem()`.
 
-**Success metric**: >= 60% of repeat users adopt update/upsert mode. >= 40% fewer recreated items on second import.
-
-### Comments and Notes Preservation
+### Comments and Notes Preservation : Done
 
 Carry over non-visual metadata from Excalidraw into Miro.
 
-- Excalidraw link references become Miro item links or comments
-- Element-level notes or descriptions become Miro card annotations
-- Preserve any custom metadata in `customData` fields
+- Excalidraw `link` field appended as clickable `<a>` tag in shape/text content
+- `customData` key-value pairs appended as formatted text below element content
+- Applied to shapes and standalone text elements
 
-**Why users care**: Architecture diagrams often carry decision context, links to docs, or notes. Losing them on import forces manual re-entry.
+**Implementation**: `customData` field added to Excalidraw types, `appendMetadataToContent()` in converter applied during shape and text creation.
 
-**Success metric**: >= 80% of link/note metadata preserved on supported elements.
-
-### Obsidian Workflow Mode
+### Obsidian Workflow Mode : Done
 
 First-class support for Excalidraw files created via the Obsidian Excalidraw plugin.
 
-- Parse `.excalidraw.md` files (Excalidraw JSON embedded in Markdown front-matter)
-- Batch import from vault folder or by tag
-- Preserve Obsidian wiki-link references as Miro comments or links
+- Parse `.excalidraw.md` files (Excalidraw JSON embedded in `` ```json `` code blocks, `%%` delimiters, or inline)
+- Batch import from directory with `excal2miro batch`
+- Recursive directory scanning for `.excalidraw`, `.excalidraw.json`, and `.excalidraw.md` files
+- Per-file progress reporting and aggregate summary
+- Confirmation prompt before batch execution
 
-**Why users care**: Obsidian + Excalidraw is one of the most common technical documentation workflows. These users have dozens of diagrams in a vault and need bulk migration.
+**Implementation**: `parseObsidianExcalidrawMd()` parser, `findExcalidrawFiles()` directory scanner, `excal2miro batch -d ./vault -b BOARD -t TOKEN`.
 
-**Success metric**: Successful import of Obsidian-format files with zero manual pre-processing.
+### Team Style Profiles : Done
 
-### Team Style Profiles
+Style profiles that normalize aesthetics to match team Miro board standards.
 
-Import style profiles that normalize aesthetics to match team Miro board standards.
+- Define overrides for: font family, font size, text color, fill color, fill opacity, border color, border width, border style, connector color, connector stroke width
+- `preserveOriginalStyles` flag to keep source file styles untouched
+- 3 built-in profiles: Corporate Clean, Design System, Sketch/Hand-drawn
+- Apply via CLI `--style-profile profile.json` or web UI selector
+- Overrides applied to shapes, text, and connectors during mapping
 
-- Define font, color palette, stroke width, and connector style overrides
-- Apply per-import or as a persistent team default
-- Option to preserve original Excalidraw styles or normalize to profile
+**Implementation**: `StyleProfile` type, `applyShapeProfileOverrides()` / `applyTextProfileOverrides()` in style mapper, `/api/style-profiles` endpoint, web UI profile selector.
 
-**Why users care**: When multiple team members import different Excalidraw files into the same board, visual consistency matters. Today every import uses the source file's styles.
-
-**Success metric**: Manual post-import edits reduced by 35%.
-
-### Connector Repair
+### Connector Repair : Done
 
 Interactive resolution for skipped or ambiguous connectors.
 
-- After import, list connectors that couldn't be resolved
-- For each, show the source/target candidates and let users select the correct binding
-- Apply fixes via Miro API update calls
+- `excal2miro repair` command loads original file and mapping from previous import
+- Lists skipped connectors with skip reasons
+- Shows available shape candidates from the ID mapping (up to 10)
+- User selects start and end shapes for each connector interactively
+- Creates connector via Miro API with default curved style
+- Reports repair success count
 
-**Why users care**: Connectors are the most fragile part of the import. Architecture diagrams are useless without them. This is the highest-pain post-import problem.
-
-**Success metric**: Connector resolution success >= 95% after repair flow.
+**Implementation**: `excal2miro repair -i file.excalidraw -b BOARD -t TOKEN --mapping-file state.json`.
 
 ---
 

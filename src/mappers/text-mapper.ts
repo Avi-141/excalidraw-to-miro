@@ -52,7 +52,7 @@ export function mapText(
       origin: 'center',
     },
     style: {
-      ...buildTextStyle(element),
+      ...buildTextStyle(element, options.styleProfile),
       textAlign: element.textAlign,
     },
   };

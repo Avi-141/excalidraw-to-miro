@@ -3,7 +3,7 @@ import * as path from 'path';
 import { ExcalidrawFile, ExcalidrawElement } from '../types';
 
 /**
- * Parse an Excalidraw JSON file
+ * Parse an Excalidraw file, supporting both .excalidraw JSON and Obsidian .excalidraw.md format.
  */
 export function parseExcalidrawFile(filePath: string): ExcalidrawFile {
   const absolutePath = path.resolve(filePath);
@@ -13,7 +13,74 @@ export function parseExcalidrawFile(filePath: string): ExcalidrawFile {
   }
 
   const content = fs.readFileSync(absolutePath, 'utf-8');
+
+  if (absolutePath.endsWith('.excalidraw.md') || absolutePath.endsWith('.md')) {
+    return parseObsidianExcalidrawMd(content);
+  }
+
   return parseExcalidrawJson(content);
+}
+
+/**
+ * Parse an Obsidian .excalidraw.md file.
+ * Excalidraw JSON is embedded after a specific codeblock marker or between front-matter delimiters.
+ */
+export function parseObsidianExcalidrawMd(content: string): ExcalidrawFile {
+  const jsonBlockRegex = /```json\s*\n([\s\S]*?)\n```/;
+  const match = content.match(jsonBlockRegex);
+
+  if (match) {
+    return parseExcalidrawJson(match[1]);
+  }
+
+  const excalidrawDataRegex = /%%\s*\n([\s\S]*?)\n%%/;
+  const dataMatch = content.match(excalidrawDataRegex);
+
+  if (dataMatch) {
+    const jsonStart = dataMatch[1].indexOf('{');
+    if (jsonStart !== -1) {
+      return parseExcalidrawJson(dataMatch[1].slice(jsonStart));
+    }
+  }
+
+  const rawJsonStart = content.indexOf('{"type":"excalidraw"');
+  if (rawJsonStart !== -1) {
+    return parseExcalidrawJson(content.slice(rawJsonStart));
+  }
+
+  throw new Error(
+    'Could not find Excalidraw JSON data in .excalidraw.md file. '
+    + 'Expected a ```json code block, %% delimited data, or inline JSON.'
+  );
+}
+
+/**
+ * Find all Excalidraw files in a directory, including .excalidraw.md files.
+ */
+export function findExcalidrawFiles(dirPath: string, recursive = true): string[] {
+  const absoluteDir = path.resolve(dirPath);
+  const results: string[] = [];
+
+  if (!fs.existsSync(absoluteDir)) {
+    throw new Error(`Directory not found: ${absoluteDir}`);
+  }
+
+  const entries = fs.readdirSync(absoluteDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const fullPath = path.join(absoluteDir, entry.name);
+    if (entry.isDirectory() && recursive) {
+      results.push(...findExcalidrawFiles(fullPath, recursive));
+    } else if (entry.isFile()) {
+      if (entry.name.endsWith('.excalidraw') ||
+          entry.name.endsWith('.excalidraw.json') ||
+          entry.name.endsWith('.excalidraw.md')) {
+        results.push(fullPath);
+      }
+    }
+  }
+
+  return results;
 }
 
 /**

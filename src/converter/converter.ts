@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import {
   ExcalidrawFile,
   ExcalidrawElement,
@@ -7,6 +8,7 @@ import {
   ExcalidrawFrame,
   ConversionOptions,
   ConversionResult,
+  CleanupSuggestion,
   PreviewElement,
   PreviewResult,
   IdMap,
@@ -72,6 +74,36 @@ export class Converter {
     }
   }
 
+  private loadExistingMappings(): IdMap {
+    if (!this.options.mappingFile) return {};
+    try {
+      if (fs.existsSync(this.options.mappingFile)) {
+        const content = fs.readFileSync(this.options.mappingFile, 'utf-8');
+        const data = JSON.parse(content);
+        this.log(`Loaded ${Object.keys(data.idMap || {}).length} existing mappings from ${this.options.mappingFile}`);
+        return data.idMap || {};
+      }
+    } catch (error) {
+      this.log(`Could not load mapping file: ${error instanceof Error ? error.message : error}`);
+    }
+    return {};
+  }
+
+  private saveMappings(idMap: IdMap): void {
+    if (!this.options.mappingFile) return;
+    try {
+      const data = {
+        boardId: this.boardId,
+        updatedAt: new Date().toISOString(),
+        idMap,
+      };
+      fs.writeFileSync(this.options.mappingFile, JSON.stringify(data, null, 2), 'utf-8');
+      this.log(`Saved ${Object.keys(idMap).length} mappings to ${this.options.mappingFile}`);
+    } catch (error) {
+      this.log(`Could not save mapping file: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
   /**
    * Generate a preview of what would happen without calling the Miro API.
    */
@@ -93,6 +125,8 @@ export class Converter {
       }
     }
 
+    const mergeableTextIds = this.computeMergeableTexts(groups.shapes, groups.text);
+
     for (const el of groups.text) {
       const t = el as ExcalidrawText;
       if (isContainerBoundText(t)) {
@@ -101,17 +135,16 @@ export class Converter {
           miroType: 'merged into parent shape',
           fidelityNote: 'Text will be embedded in parent shape content',
         });
-      } else {
-        const overlapsShape = groups.shapes.some((s) => {
-          const tcx = t.x + t.width / 2;
-          const tcy = t.y + t.height / 2;
-          return tcx >= s.x && tcx <= s.x + s.width
-            && tcy >= s.y && tcy <= s.y + s.height;
-        });
+      } else if (mergeableTextIds.has(el.id)) {
         previewElements.push({
           id: el.id, type: 'text', status: 'will_create',
-          miroType: overlapsShape ? 'merged into shape' : 'text',
-          fidelityNote: overlapsShape ? 'Text center is inside a shape — will merge' : undefined,
+          miroType: 'merged into shape',
+          fidelityNote: 'Text center is inside a shape — will merge',
+        });
+      } else {
+        previewElements.push({
+          id: el.id, type: 'text', status: 'will_create',
+          miroType: 'text',
         });
       }
     }
@@ -242,6 +275,8 @@ export class Converter {
   async convertJson(fileJson: string): Promise<ConversionResult> {
     const file = parseExcalidrawJson(fileJson);
 
+    const existingMappings = this.loadExistingMappings();
+
     const result: ConversionResult = {
       success: false,
       itemsCreated: 0,
@@ -250,13 +285,14 @@ export class Converter {
       imagesCreated: 0,
       freedrawConverted: 0,
       skippedElements: [],
-      idMap: {},
+      idMap: { ...existingMappings },
       errors: [],
+      cleanupSuggestions: [],
     };
 
     try {
       const elements = getActiveElements(file);
-      this.log(`Found ${elements.length} active elements`);
+      this.log(`Found ${elements.length} active elements (mode: ${this.options.importMode})`);
 
       if (elements.length === 0) {
         result.success = true;
@@ -300,7 +336,10 @@ export class Converter {
       }
 
       this.handleSkippedElements(groups, result);
+      this.generateCleanupSuggestions(groups, elements, result);
       result.success = result.errors.length === 0;
+
+      this.saveMappings(result.idMap);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       result.errors.push(message);
@@ -310,6 +349,8 @@ export class Converter {
   }
 
   async convert(inputPath: string): Promise<ConversionResult> {
+    const existingMappings = this.loadExistingMappings();
+
     const result: ConversionResult = {
       success: false,
       itemsCreated: 0,
@@ -318,8 +359,9 @@ export class Converter {
       imagesCreated: 0,
       freedrawConverted: 0,
       skippedElements: [],
-      idMap: {},
+      idMap: { ...existingMappings },
       errors: [],
+      cleanupSuggestions: [],
     };
 
     try {
@@ -353,13 +395,11 @@ export class Converter {
 
       const groups = groupElementsByType(elements);
 
-      // Phase 0: Create frames first so children can be attached
       if (this.options.convertFrames && groups.frames.length > 0) {
         this.log(`Creating ${groups.frames.length} frames...`);
         await this.createFrames(groups.frames, result);
       }
 
-      // Phase 1: Create shapes and text
       this.log(
         `Creating ${groups.shapes.length} shapes + ${groups.text.length} text elements...`
       );
@@ -370,24 +410,20 @@ export class Converter {
         result
       );
 
-      // Phase 1b: Create images
       if (this.options.convertImages && groups.images.length > 0) {
         this.log(`Creating ${groups.images.length} images...`);
         await this.createImages(groups.images, file, result);
       }
 
-      // Phase 1c: Convert freedraw elements to SVG images
       if (this.options.convertFreedraw && !this.options.skipFreedraw && groups.freedraw.length > 0) {
         this.log(`Converting ${groups.freedraw.length} freedraw elements to SVG...`);
         await this.createFreedrawImages(groups.freedraw, result);
       }
 
-      // Phase 1d: Attach children to frames
       if (this.options.convertFrames && groups.frames.length > 0) {
         await this.attachChildrenToFrames(elements, result);
       }
 
-      // Phase 2: Create connectors
       const allArrowsAndLines = [...groups.arrows, ...groups.lines];
       if (this.options.createConnectors && allArrowsAndLines.length > 0) {
         this.log(`Creating ${allArrowsAndLines.length} connectors...`);
@@ -395,8 +431,11 @@ export class Converter {
       }
 
       this.handleSkippedElements(groups, result);
+      this.generateCleanupSuggestions(groups, elements, result);
 
       result.success = result.errors.length === 0;
+
+      this.saveMappings(result.idMap);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       result.errors.push(message);
@@ -460,13 +499,14 @@ export class Converter {
 
         if (!content) {
           const overlapping = this.findOverlappingTexts(element, textElements);
-          if (overlapping.length > 0) {
-            content = overlapping
+          const mergeable = overlapping.filter((t) => this.shouldMergeText(t, element));
+          if (mergeable.length > 0) {
+            content = mergeable
               .map((t) => this.escapeText(t.text))
               .join('<br>');
-            overlapping.forEach((t) => mergedTextIds.add(t.id));
+            mergeable.forEach((t) => mergedTextIds.add(t.id));
             this.log(
-              `Merged ${overlapping.length} text(s) into shape ${element.id}`
+              `Merged ${mergeable.length} text(s) into shape ${element.id}`
             );
           }
         }
@@ -475,6 +515,27 @@ export class Converter {
 
         if (content) {
           request.data.content = content;
+        }
+
+        this.appendMetadataToContent(element, request.data);
+
+        const existingMiroId = result.idMap[element.id];
+        const mode = this.options.importMode;
+
+        if (existingMiroId && existingMiroId !== 'merged' && (mode === 'update' || mode === 'upsert')) {
+          const exists = await this.client.itemExists(this.boardId, existingMiroId);
+          if (exists) {
+            await this.client.updateShape(this.boardId, existingMiroId, request);
+            this.log(`Updated shape ${element.type} (${element.id} -> ${existingMiroId})`);
+            result.itemsCreated++;
+            continue;
+          } else if (mode === 'update') {
+            result.skippedElements.push({ id: element.id, type: element.type, reason: 'Mapped Miro item no longer exists (update mode)' });
+            continue;
+          }
+        } else if (mode === 'update' && !existingMiroId) {
+          result.skippedElements.push({ id: element.id, type: element.type, reason: 'No existing mapping (update mode)' });
+          continue;
         }
 
         const miroItem = await this.client.createShape(this.boardId, request);
@@ -509,6 +570,27 @@ export class Converter {
 
       try {
         const request = mapText(textEl, this.options);
+        this.appendMetadataToContent(element, request.data);
+
+        const existingMiroId = result.idMap[element.id];
+        const mode = this.options.importMode;
+
+        if (existingMiroId && existingMiroId !== 'merged' && (mode === 'update' || mode === 'upsert')) {
+          const exists = await this.client.itemExists(this.boardId, existingMiroId);
+          if (exists) {
+            await this.client.updateText(this.boardId, existingMiroId, request);
+            this.log(`Updated text (${element.id} -> ${existingMiroId})`);
+            result.itemsCreated++;
+            continue;
+          } else if (mode === 'update') {
+            result.skippedElements.push({ id: element.id, type: 'text', reason: 'Mapped Miro item no longer exists (update mode)' });
+            continue;
+          }
+        } else if (mode === 'update' && !existingMiroId) {
+          result.skippedElements.push({ id: element.id, type: 'text', reason: 'No existing mapping (update mode)' });
+          continue;
+        }
+
         const miroItem = await this.client.createText(this.boardId, request);
         result.idMap[element.id] = miroItem.id;
         result.itemsCreated++;
@@ -520,6 +602,59 @@ export class Converter {
         result.errors.push(`Failed to create text ${element.id}: ${message}`);
       }
     }
+  }
+
+  private appendMetadataToContent(
+    element: ExcalidrawElement,
+    data: { content?: string }
+  ): void {
+    const parts: string[] = [];
+
+    if (element.link) {
+      parts.push(`<a href="${this.escapeText(element.link)}">${this.escapeText(element.link)}</a>`);
+    }
+
+    if (element.customData) {
+      const entries = Object.entries(element.customData);
+      if (entries.length > 0) {
+        const notes = entries
+          .map(([key, value]) => `${this.escapeText(key)}: ${this.escapeText(String(value))}`)
+          .join('<br>');
+        parts.push(notes);
+      }
+    }
+
+    if (parts.length > 0) {
+      const metadata = parts.join('<br>');
+      data.content = data.content
+        ? `${data.content}<br><br>${metadata}`
+        : metadata;
+    }
+  }
+
+  /**
+   * Pre-compute which texts would be merged, using the same heuristics
+   * as the actual conversion. Returns a set of text element IDs that will merge.
+   */
+  private computeMergeableTexts(
+    shapes: ExcalidrawElement[],
+    textElements: ExcalidrawElement[]
+  ): Set<string> {
+    const mergeable = new Set<string>();
+
+    for (const shape of shapes) {
+      if (!isConvertibleShape(shape)) continue;
+      if (shape.boundElements?.some((be) => be.type === 'text')) continue;
+
+      const overlapping = this.findOverlappingTexts(shape, textElements);
+      for (const t of overlapping) {
+        if (this.shouldMergeText(t, shape)) {
+          mergeable.add(t.id);
+        }
+      }
+    }
+
+    return mergeable;
   }
 
   private findOverlappingTexts(
@@ -549,6 +684,25 @@ export class Converter {
 
     result.sort((a, b) => a.y - b.y);
     return result;
+  }
+
+  /**
+   * Determine whether an overlapping text should be merged into a shape.
+   * Rejects merging when the shape is a table-row background or banner:
+   * these are very wide, low-height rectangles with multiple small texts
+   * positioned across columns. Labeled shapes (boxes with titles inside)
+   * have moderate aspect ratios and text that fills a meaningful fraction.
+   */
+  private shouldMergeText(_text: ExcalidrawText, shape: ExcalidrawElement): boolean {
+    if (shape.width === 0 || shape.height === 0) return false;
+
+    const aspectRatio = shape.width / shape.height;
+
+    // Shapes with aspect ratio > 6:1 are table rows / banners —
+    // texts on them are column values, not labels for the shape.
+    if (aspectRatio > 6) return false;
+
+    return true;
   }
 
   private escapeText(text: string): string {
@@ -784,6 +938,112 @@ export class Converter {
       for (const skipped of result.skippedElements) {
         console.log(`  - ${skipped.type} (${skipped.id}): ${skipped.reason}`);
       }
+    }
+  }
+
+  private generateCleanupSuggestions(
+    groups: ReturnType<typeof groupElementsByType>,
+    allElements: ExcalidrawElement[],
+    result: ConversionResult
+  ): void {
+    const skippedConnectors = result.skippedElements.filter(
+      (s) => s.type === 'arrow' || s.type === 'line'
+    );
+    if (skippedConnectors.length > 0) {
+      for (const sc of skippedConnectors) {
+        const original = allElements.find((el) => el.id === sc.id);
+        if (!original) continue;
+
+        const nearbyShapes: string[] = [];
+        for (const shape of groups.shapes) {
+          const dx = Math.abs((shape.x + shape.width / 2) - (original.x + original.width / 2));
+          const dy = Math.abs((shape.y + shape.height / 2) - (original.y + original.height / 2));
+          if (dx < 300 && dy < 300) {
+            nearbyShapes.push(`${shape.type} (${shape.id.slice(0, 8)}...)`);
+          }
+        }
+
+        result.cleanupSuggestions.push({
+          category: 'connector',
+          severity: 'action',
+          message: `Connector ${sc.id.slice(0, 8)}... was skipped: ${sc.reason}`,
+          elementId: sc.id,
+          elementType: sc.type,
+          suggestion: nearbyShapes.length > 0
+            ? `Nearby shapes: ${nearbyShapes.slice(0, 3).join(', ')}. Manually connect them in Miro.`
+            : 'No nearby shapes found. This connector may have been orphaned in the source.',
+        });
+      }
+    }
+
+    const orphanTexts = result.skippedElements.filter(
+      (s) => s.type === 'text' && s.reason.includes('merge')
+    );
+    const allTexts = groups.text;
+    for (const t of allTexts) {
+      const textEl = t as ExcalidrawText;
+      if (isContainerBoundText(textEl)) continue;
+
+      const miroId = result.idMap[t.id];
+      if (miroId && miroId !== 'merged') {
+        const isNearShape = groups.shapes.some((s) => {
+          const dx = Math.abs((s.x + s.width / 2) - (t.x + t.width / 2));
+          const dy = Math.abs((s.y + s.height / 2) - (t.y + t.height / 2));
+          return dx < 200 && dy < 200;
+        });
+
+        if (!isNearShape) {
+          result.cleanupSuggestions.push({
+            category: 'text',
+            severity: 'info',
+            message: `Standalone text "${textEl.text.slice(0, 30)}${textEl.text.length > 30 ? '...' : ''}" was not merged into any shape`,
+            elementId: t.id,
+            elementType: 'text',
+            suggestion: 'Review this text on the Miro board — it may need to be manually grouped with nearby elements.',
+          });
+        }
+      }
+    }
+
+    const degradedFrames = groups.frames.filter((f) => f.angle !== 0);
+    for (const frame of degradedFrames) {
+      result.cleanupSuggestions.push({
+        category: 'fidelity',
+        severity: 'warning',
+        message: `Frame "${(frame as ExcalidrawFrame).name || frame.id.slice(0, 8)}" had rotation (${Math.round((frame.angle * 180) / Math.PI)}°) that was dropped`,
+        elementId: frame.id,
+        elementType: 'frame',
+        suggestion: 'Miro frames do not support rotation. Review child element positions on the board.',
+      });
+    }
+
+    const freedrawCount = groups.freedraw.filter((fd) => result.idMap[fd.id]).length;
+    if (freedrawCount > 0) {
+      result.cleanupSuggestions.push({
+        category: 'fidelity',
+        severity: 'info',
+        message: `${freedrawCount} freedraw element(s) were converted to static SVG images`,
+        suggestion: 'These are not editable as strokes in Miro. Use "Ungroup" in Miro if you need to modify them.',
+      });
+    }
+
+    if (orphanTexts.length > 0) {
+      result.cleanupSuggestions.push({
+        category: 'text',
+        severity: 'info',
+        message: `${orphanTexts.length} text element(s) were skipped during merge`,
+        suggestion: 'Check the board for text that may be positioned incorrectly.',
+      });
+    }
+
+    const totalIssues = result.cleanupSuggestions.filter((s) => s.severity !== 'info').length;
+    if (totalIssues > 0) {
+      result.cleanupSuggestions.push({
+        category: 'layout',
+        severity: 'info',
+        message: `${totalIssues} item(s) may need attention on the board`,
+        suggestion: 'Open the Miro board to review flagged elements and make manual adjustments.',
+      });
     }
   }
 }
