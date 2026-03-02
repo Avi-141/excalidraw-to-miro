@@ -95,14 +95,19 @@ export function mapConnector(
     return null;
   }
 
+  const profile = options.styleProfile;
   const request: MiroCreateConnectorRequest = {
     startItem: startEndpoint,
     endItem: endEndpoint,
     shape: determineConnectorShape(element),
     style: {
-      strokeColor: mapColor(element.strokeColor),
+      strokeColor: (profile && !profile.preserveOriginalStyles && profile.overrides.connectorColor)
+        ? profile.overrides.connectorColor
+        : mapColor(element.strokeColor),
       strokeStyle: mapStrokeStyle(element.strokeStyle),
-      strokeWidth: mapStrokeWidth(element.strokeWidth),
+      strokeWidth: (profile && !profile.preserveOriginalStyles && profile.overrides.connectorStrokeWidth)
+        ? profile.overrides.connectorStrokeWidth
+        : mapStrokeWidth(element.strokeWidth),
     },
   };
 

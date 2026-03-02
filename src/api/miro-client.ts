@@ -204,6 +204,58 @@ export class MiroClient {
   }
 
   /**
+   * Update an existing shape on the board
+   */
+  async updateShape(
+    boardId: string,
+    itemId: string,
+    request: Partial<MiroCreateShapeRequest>
+  ): Promise<MiroShapeItem> {
+    this.log(`Updating shape: ${itemId}`);
+    const response = await this.client.patch(
+      `/boards/${boardId}/shapes/${itemId}`,
+      request
+    );
+    return response.data;
+  }
+
+  /**
+   * Update an existing text item on the board
+   */
+  async updateText(
+    boardId: string,
+    itemId: string,
+    request: Partial<MiroCreateTextRequest>
+  ): Promise<MiroTextItem> {
+    this.log(`Updating text: ${itemId}`);
+    const response = await this.client.patch(
+      `/boards/${boardId}/texts/${itemId}`,
+      request
+    );
+    return response.data;
+  }
+
+  /**
+   * Delete an item from the board
+   */
+  async deleteItem(boardId: string, itemId: string): Promise<void> {
+    this.log(`Deleting item: ${itemId}`);
+    await this.client.delete(`/boards/${boardId}/items/${itemId}`);
+  }
+
+  /**
+   * Check if an item exists on the board
+   */
+  async itemExists(boardId: string, itemId: string): Promise<boolean> {
+    try {
+      await this.client.get(`/boards/${boardId}/items/${itemId}`);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Batch create multiple items (respects rate limits)
    */
   async batchCreate<T>(

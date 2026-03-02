@@ -25,6 +25,15 @@ interface PreviewResult {
   };
 }
 
+interface CleanupSuggestion {
+  category: 'connector' | 'text' | 'fidelity' | 'layout';
+  severity: 'info' | 'warning' | 'action';
+  message: string;
+  elementId?: string;
+  elementType?: string;
+  suggestion: string;
+}
+
 interface ConversionResult {
   success: boolean;
   itemsCreated: number;
@@ -35,12 +44,19 @@ interface ConversionResult {
   skippedElements: Array<{ id: string; type: string; reason: string }>;
   errors: string[];
   boardUrl?: string;
+  cleanupSuggestions?: CleanupSuggestion[];
 }
 
 interface Preset {
   id: string;
   name: string;
   description: string;
+}
+
+interface StyleProfileOption {
+  id: string;
+  name: string;
+  description?: string;
 }
 
 type Step = 'setup' | 'upload' | 'preview' | 'converting' | 'result';
@@ -50,6 +66,7 @@ export default function App() {
   const [token, setToken] = useState('');
   const [boardId, setBoardId] = useState('');
   const [preset, setPreset] = useState('');
+  const [styleProfile, setStyleProfile] = useState('');
   const [scale, setScale] = useState('1');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
@@ -64,6 +81,13 @@ export default function App() {
     { id: 'architecture', name: 'Architecture Diagram', description: 'Prioritize connector fidelity and smart snapping' },
     { id: 'workshop', name: 'Workshop Board', description: 'Preserve hand-drawn feel with looser layout' },
     { id: 'product-flow', name: 'Product Flow', description: 'Merge text aggressively, skip freedraw' },
+  ];
+
+  const styleProfiles: StyleProfileOption[] = [
+    { id: '', name: 'Original', description: 'Keep source file styles as-is' },
+    { id: 'corporate-clean', name: 'Corporate Clean', description: 'Professional fonts and muted colors' },
+    { id: 'design-system', name: 'Design System', description: 'Modern blue accent with clean typography' },
+    { id: 'sketch-hand-drawn', name: 'Sketch', description: 'Preserve hand-drawn aesthetic' },
   ];
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -95,6 +119,7 @@ export default function App() {
       formData.append('file', file);
       formData.append('scale', scale);
       if (preset) formData.append('preset', preset);
+      if (styleProfile) formData.append('styleProfile', styleProfile);
 
       const res = await fetch('/api/preview', { method: 'POST', body: formData });
       if (!res.ok) {
@@ -124,6 +149,7 @@ export default function App() {
       formData.append('boardId', boardId);
       formData.append('scale', scale);
       if (preset) formData.append('preset', preset);
+      if (styleProfile) formData.append('styleProfile', styleProfile);
 
       const res = await fetch('/api/convert', { method: 'POST', body: formData });
       const data = await res.json();
@@ -175,6 +201,7 @@ export default function App() {
     setResult(null);
     setError('');
     setCopied(false);
+    setStyleProfile('');
   };
 
   return (
@@ -304,6 +331,27 @@ export default function App() {
                   >
                     <div className="text-sm font-medium">{p.name}</div>
                     <div className="text-xs text-gray-500 mt-1">{p.description}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Style profile */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-3">Style Profile</label>
+              <div className="grid grid-cols-2 gap-3">
+                {styleProfiles.map((sp) => (
+                  <button
+                    key={sp.id}
+                    onClick={() => setStyleProfile(sp.id)}
+                    className={`p-3 rounded-lg border text-left transition-colors ${
+                      styleProfile === sp.id
+                        ? 'border-purple-500 bg-purple-950/30 text-purple-200'
+                        : 'border-gray-700 bg-gray-900/50 text-gray-300 hover:border-gray-500'
+                    }`}
+                  >
+                    <div className="text-sm font-medium">{sp.name}</div>
+                    <div className="text-xs text-gray-500 mt-1">{sp.description}</div>
                   </button>
                 ))}
               </div>
@@ -466,6 +514,37 @@ export default function App() {
               <div className="bg-red-900/20 rounded-lg border border-red-800 p-4">
                 <h3 className="text-sm font-medium text-red-300 mb-2">Errors</h3>
                 {result.errors.map((e, i) => <p key={i} className="text-sm text-red-400">{e}</p>)}
+              </div>
+            )}
+
+            {/* Cleanup suggestions */}
+            {result.cleanupSuggestions && result.cleanupSuggestions.length > 0 && (
+              <div className="bg-gray-900 rounded-lg border border-gray-800 p-4">
+                <h3 className="text-sm font-medium text-gray-300 mb-3">Cleanup Suggestions</h3>
+                <div className="space-y-3 max-h-64 overflow-y-auto">
+                  {result.cleanupSuggestions.map((s, i) => (
+                    <div key={i} className="flex items-start gap-3 text-sm p-3 rounded-lg bg-gray-800/50">
+                      <span className={`mt-0.5 shrink-0 ${
+                        s.severity === 'action' ? 'text-red-400'
+                        : s.severity === 'warning' ? 'text-yellow-400'
+                        : 'text-blue-400'
+                      }`}>
+                        {s.severity === 'action' ? '!' : s.severity === 'warning' ? '⚠' : 'i'}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-gray-200">{s.message}</p>
+                        <p className={`text-xs mt-1 ${
+                          s.severity === 'action' ? 'text-red-300'
+                          : s.severity === 'warning' ? 'text-yellow-300'
+                          : 'text-blue-300'
+                        }`}>
+                          {s.suggestion}
+                        </p>
+                      </div>
+                      <span className="text-xs text-gray-600 shrink-0">{s.category}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

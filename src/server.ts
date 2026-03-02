@@ -3,7 +3,7 @@ import cors from 'cors';
 import multer from 'multer';
 import path from 'path';
 import { Converter } from './converter';
-import { ConversionOptions, DEFAULT_OPTIONS, PreviewResult } from './types';
+import { ConversionOptions, DEFAULT_OPTIONS, PreviewResult, StyleProfile } from './types';
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
@@ -36,6 +36,51 @@ const PRESETS: Record<string, Partial<ConversionOptions>> = {
   },
 };
 
+const BUILT_IN_STYLE_PROFILES: Record<string, StyleProfile> = {
+  'corporate-clean': {
+    name: 'Corporate Clean',
+    description: 'Professional look with consistent fonts and muted colors',
+    overrides: {
+      fontFamily: 'arial',
+      fontSize: '14',
+      borderColor: '#1a1a1a',
+      borderWidth: '2.0',
+      borderStyle: 'normal',
+      connectorColor: '#1a1a1a',
+      connectorStrokeWidth: '2.0',
+    },
+  },
+  'design-system': {
+    name: 'Design System',
+    description: 'Modern design tokens with blue accent and rounded style',
+    overrides: {
+      fontFamily: 'arial',
+      fontSize: '14',
+      borderColor: '#2563eb',
+      borderWidth: '2.0',
+      fillColor: '#eff6ff',
+      fillOpacity: '1.0',
+      textColor: '#1e293b',
+      connectorColor: '#2563eb',
+      connectorStrokeWidth: '2.0',
+    },
+  },
+  'sketch-hand-drawn': {
+    name: 'Sketch / Hand-drawn',
+    description: 'Preserve the hand-drawn Excalidraw aesthetic',
+    overrides: {},
+    preserveOriginalStyles: true,
+  },
+};
+
+app.get('/api/style-profiles', (_req, res) => {
+  const profiles = Object.entries(BUILT_IN_STYLE_PROFILES).map(([id, profile]) => ({
+    id,
+    ...profile,
+  }));
+  res.json(profiles);
+});
+
 app.get('/api/presets', (_req, res) => {
   const presetList = Object.entries(PRESETS).map(([id, opts]) => ({
     id,
@@ -61,11 +106,17 @@ app.post('/api/preview', upload.single('file'), (req, res) => {
     const preset = req.body.preset as string | undefined;
     const presetOpts = preset && PRESETS[preset] ? PRESETS[preset] : {};
 
+    const styleProfileId = req.body.styleProfile as string | undefined;
+    const styleProfile = styleProfileId && BUILT_IN_STYLE_PROFILES[styleProfileId]
+      ? BUILT_IN_STYLE_PROFILES[styleProfileId]
+      : undefined;
+
     const options: Partial<ConversionOptions> = {
       ...DEFAULT_OPTIONS,
       ...presetOpts,
       scale: parseFloat(req.body.scale) || 1,
       dryRun: true,
+      styleProfile,
     };
 
     const converter = new Converter({
@@ -105,9 +156,15 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
     const preset = req.body.preset as string | undefined;
     const presetOpts = preset && PRESETS[preset] ? PRESETS[preset] : {};
 
+    const styleProfileId = req.body.styleProfile as string | undefined;
+    const styleProfile = styleProfileId && BUILT_IN_STYLE_PROFILES[styleProfileId]
+      ? BUILT_IN_STYLE_PROFILES[styleProfileId]
+      : undefined;
+
     const options: Partial<ConversionOptions> = {
       ...presetOpts,
       scale: parseFloat(req.body.scale) || 1,
+      styleProfile,
     };
 
     const converter = new Converter({

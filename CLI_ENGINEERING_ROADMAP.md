@@ -4,34 +4,146 @@ Infrastructure, reliability, and developer experience features. These are the bu
 
 ## Current State
 
-The CLI (`excal2miro`) accepts a file path, board ID, and token. It runs a sequential pipeline: parse -> group by type -> map elements -> call Miro API -> report results. Key characteristics:
+The CLI (`excal2miro`) supports subcommands (`convert`, `preview`, `guided`, `batch`, `repair`) and a backward-compatible default mode with flags. Key characteristics:
+
+- **Dry-run / Preview**: `excal2miro preview` parses and maps without calling the Miro API : Done
+- **Output formatters**: `--output-format text|markdown|json` for all commands : Done
+- **Batch mode**: `excal2miro batch` imports entire directories including Obsidian vaults : Done
+- **Interactive prompts**: `excal2miro guided` walks users through setup : Done
+- **Presets**: `--preset architecture|workshop|product-flow` : Done
+- **Style profiles**: `--style-profile profile.json` with built-in and custom profiles : Done
+- **Import modes**: `--import-mode create|update|upsert` with `--mapping-file` persistence : Done
+- **Miro update API**: `updateShape`, `updateText`, `deleteItem`, `itemExists` : Done
+- **Obsidian parser**: `.excalidraw.md` support with JSON extraction : Done
+- **Connector repair**: `excal2miro repair` interactive post-import resolution : Done
+- **Cleanup suggestions**: Generated per-conversion with categories and severities : Done
+- **Metadata preservation**: Links and customData carried through conversion : Done
+
+Remaining gaps:
 
 - **No retry logic**: A single API failure permanently fails that element
-- **No dry-run**: Every run writes to Miro irreversibly
-- **No batch mode**: One file per invocation
-- **No config file**: All options via CLI flags or env vars
+- **No config file**: All options via CLI flags, env vars, or presets
 - **Hardcoded rate limit**: Fixed 100ms delay between API calls
-- **No interactive prompts**: All inputs must be provided upfront
 - **No CLI argument tests**: `cli.ts` is excluded from test coverage
 - **No direct MiroClient tests**: Always mocked in test suite
 - **No ESLint config**: `npm run lint` script exists but no `.eslintrc`
+- **No structured error codes**: Skip reasons are still free-text strings
 
 ---
 
-## Near-Term: Reliable Foundation (0-2 months)
+## Implemented: Near-Term Features
 
-### Dry-Run Mode (`--dry-run`)
+### Dry-Run Mode : Done
 
-Run the full parse-and-map pipeline without calling the Miro API. Return the same `ConversionResult` structure with projected counts.
+Run the full parse-and-map pipeline without calling the Miro API.
 
-- Short-circuit `converter.ts` after mapping phase, before any `client.create*` calls
-- Output human-readable summary to stdout
-- Output machine-readable JSON to stdout or file (`--output-format json`, `--output-file report.json`)
-- Validate board access (call `getBoard`) unless `--offline` is specified
+- `excal2miro preview -i file.excalidraw` runs parse, group, and map phases
+- Returns `PreviewResult` with per-element status (will_create, will_skip, degraded), fidelity notes, and breakdown
+- `--output-format json` for machine consumption, `text` for human reading
+- Available via CLI, `/api/preview` endpoint, and web UI
 
-**Enables user feature**: Import Preview.
+**Enabled user features**: Import Preview, trust-building for first-time users.
 
-**Implementation scope**: Add `dryRun` flag to `ConversionOptions`. In `converter.ts`, skip API calls when `dryRun` is true but still run all parsing, grouping, and mapping logic. In `cli.ts`, add `--dry-run` flag and format output.
+### Batch Conversion : Done
+
+Process multiple `.excalidraw` files in one invocation.
+
+- `excal2miro batch -d ./diagrams -b BOARD -t TOKEN`
+- Recursive directory scanning for `.excalidraw`, `.excalidraw.json`, `.excalidraw.md` files
+- `--no-recursive` flag to limit to top-level directory
+- Per-file progress reporting with success/failure counts
+- Confirmation prompt before execution
+- Supports `--preset` and `--style-profile` for all files in the batch
+
+**Enabled user features**: Obsidian Workflow Mode, team migrations.
+
+### Interactive CLI Prompts : Done
+
+Interactive mode via `excal2miro guided` when users don't know the flags.
+
+- File path prompt with existence validation
+- Token prompt with developer portal link (skipped if `MIRO_TOKEN` env var set)
+- Board ID prompt with URL format guidance
+- Preset selection from numbered menu (1-4)
+- Preview displayed with confirmation before execution
+- Uses Node.js `readline` (no external dependencies)
+
+**Enabled user feature**: Beginner-Friendly Guided Import.
+
+### Output Formatters : Done
+
+Structured output for conversion results in multiple formats.
+
+- `--output-format text` (default): human-readable with aligned columns
+- `--output-format markdown`: table format with board link, suitable for Slack/Notion/Jira
+- `--output-format json`: machine-parseable with counts, skipped elements, errors, and cleanup suggestions
+- Applied to both conversion results and preview output
+- Web UI "Copy Summary" generates Markdown format
+
+**Enabled user features**: Shareable Import Summary Card, CI/automation integration.
+
+### ID Map Persistence : Done
+
+Save and load Excalidraw-to-Miro ID mappings between runs.
+
+- `--mapping-file state.json` persists `idMap` as JSON with board ID and timestamp
+- Loaded at start of conversion; merged with new mappings; saved at end
+- Supports `--import-mode update` (modify existing only) and `upsert` (create + update)
+- In update mode: elements without existing mappings are skipped
+- In upsert mode: existing items updated via Miro PATCH API, new items created normally
+
+**Enabled user feature**: Smart Re-Import for Living Diagrams.
+
+### Miro Update API Methods : Done
+
+Added PATCH and DELETE methods to `MiroClient`.
+
+- `updateShape(boardId, itemId, request)` — PATCH `/boards/{id}/shapes/{id}`
+- `updateText(boardId, itemId, request)` — PATCH `/boards/{id}/texts/{id}`
+- `deleteItem(boardId, itemId)` — DELETE `/boards/{id}/items/{id}`
+- `itemExists(boardId, itemId)` — GET with boolean return (catches 404)
+
+**Enabled user features**: Smart Re-Import, Connector Repair.
+
+### Obsidian Format Parser : Done
+
+Parse `.excalidraw.md` files from the Obsidian Excalidraw plugin.
+
+- Extracts Excalidraw JSON from `` ```json `` code blocks
+- Fallback to `%%` delimited sections
+- Fallback to inline `{"type":"excalidraw"...}` JSON
+- `findExcalidrawFiles(dir, recursive)` scans directories for all supported extensions
+- Integrated into `parseExcalidrawFile()` — auto-detects format by extension
+
+**Enabled user feature**: Obsidian Workflow Mode.
+
+### Style Profile System : Done
+
+Apply style overrides to normalize visual aesthetics.
+
+- `StyleProfile` type with overrides: fontFamily, fontSize, textColor, fillColor, fillOpacity, borderColor, borderWidth, borderStyle, connectorColor, connectorStrokeWidth
+- `preserveOriginalStyles` flag bypasses overrides
+- CLI: `--style-profile profile.json` loads custom profile
+- Server: 3 built-in profiles (Corporate Clean, Design System, Sketch) via `/api/style-profiles`
+- Applied at the mapper level: `buildShapeStyle()`, `buildTextStyle()`, connector mapper
+
+**Enabled user feature**: Team Style Profiles.
+
+### Cleanup Suggestion Engine : Done
+
+Post-conversion analysis that generates actionable suggestions.
+
+- `CleanupSuggestion` type with `category`, `severity`, `message`, `suggestion`, optional element reference
+- Categories: connector, text, fidelity, layout
+- Severities: info, warning, action
+- Detects: skipped connectors with nearby shapes, orphan text, rotated frames, freedraw fidelity loss
+- Integrated into `ConversionResult.cleanupSuggestions`
+
+**Enabled user feature**: One-Click Cleanup Suggestions.
+
+---
+
+## Remaining: Near-Term Priorities
 
 ### Retry with Exponential Backoff
 
@@ -43,17 +155,11 @@ Add retry logic to `MiroClient` for transient API failures.
 - Log each retry attempt when verbose
 - Configurable via `MiroClientOptions`: `maxRetries`, `initialRetryDelayMs`
 
-**Enables user feature**: Reliable imports for large diagrams (50+ elements).
-
-**Implementation scope**: Add retry wrapper in `miro-client.ts` around the Axios interceptor. No changes to converter or mappers.
+**Enables**: Reliable imports for large diagrams (50+ elements).
 
 ### Structured Error Codes
 
 Replace free-text skip/error reasons with machine-parseable codes and human-readable descriptions.
-
-Current state — reasons are strings like `"Cannot convert to connector"` and `"Image file data not found in .excalidraw"`.
-
-Target state:
 
 | Code | Description | Remediation |
 |---|---|---|
@@ -70,23 +176,6 @@ Target state:
 | `FRAME_DISABLED` | Frame conversion turned off | Use `--frames` to enable |
 | `TYPE_UNSUPPORTED` | Element type not supported by converter | No action available |
 
-**Enables user features**: Import Preview (fidelity indicators), One-Click Cleanup Suggestions, Shareable Summary Card.
-
-**Implementation scope**: Define `SkipCode` enum in `src/types/index.ts`. Update `skippedElements` to include `code` alongside `reason`. Update all skip-producing code paths in `converter.ts` and mapper guards.
-
-### Batch Conversion (`--in-glob`)
-
-Process multiple `.excalidraw` files in one invocation.
-
-- Accept glob pattern: `excal2miro --in-glob "diagrams/**/*.excalidraw" --board BOARD_ID`
-- Per-file progress and summary
-- Continue on error by default; `--fail-fast` to stop on first error
-- Aggregate report at the end (total created, total skipped, total errors, per-file breakdown)
-
-**Enables user features**: Obsidian Workflow Mode (batch vault import), team migrations.
-
-**Implementation scope**: Add glob resolution in `cli.ts` (use Node `glob` or `fast-glob`). Loop over files calling `converter.convert()` for each. Collect per-file `ConversionResult` objects and aggregate.
-
 ### Config File Support (`.excal2mirorc`)
 
 Load options from a config file to avoid long CLI commands.
@@ -96,65 +185,6 @@ Load options from a config file to avoid long CLI commands.
 - CLI flags override config file values
 - `excal2miro --init` to generate a starter config
 
-**Enables user features**: Presets (presets are named config bundles), Team Style Profiles.
-
-**Implementation scope**: Add config loader in `cli.ts`. Merge config values under CLI flags in the options chain.
-
----
-
-## Mid-Term: Pipeline Robustness (2-6 months)
-
-### ID Map Persistence
-
-Save and load Excalidraw-to-Miro ID mappings between runs.
-
-- Persist `ConversionResult.idMap` to a `.excal2miro-state.json` file alongside the source file
-- On subsequent runs, load prior state and use it for update/upsert mode
-- Include source file hash to detect changes
-- Include timestamp and board ID to prevent cross-board conflicts
-
-**Enables user feature**: Smart Re-Import for Living Diagrams.
-
-**Implementation scope**: New `src/state/` module. Read/write JSON. Hash source file contents. Integrate with `converter.ts` to detect existing Miro IDs.
-
-### Miro Update API Methods
-
-Add `updateShape`, `updateText`, `updateConnector`, `deleteItem` to `MiroClient`.
-
-- Use Miro REST API PATCH and DELETE endpoints
-- Required for re-import and connector repair features
-- Include same retry logic as create methods
-
-**Enables user features**: Smart Re-Import, One-Click Cleanup Suggestions, Connector Repair.
-
-**Implementation scope**: Add methods to `miro-client.ts`. Add corresponding types to `src/types/miro.ts`.
-
-### Interactive CLI Prompts
-
-Add an interactive mode when required options are missing.
-
-- Use `inquirer` or `@inquirer/prompts` for terminal prompts
-- Token: prompt with masked input, link to developer portal, option to save to env
-- Board: list available boards via API, let user select
-- Preset: display available presets, let user choose
-- Confirmation: show summary and ask before executing
-
-**Enables user feature**: Beginner-Friendly Guided Import.
-
-**Implementation scope**: Add prompt flow in `cli.ts`. Call when required options are missing. Skip prompts when all options are provided (non-interactive/CI usage).
-
-### Obsidian Format Parser
-
-Parse `.excalidraw.md` files from the Obsidian Excalidraw plugin.
-
-- Strip Markdown front-matter and extract embedded Excalidraw JSON
-- Handle Obsidian-specific conventions (wiki-links in text, vault-relative image paths)
-- Integrate with existing parser pipeline
-
-**Enables user feature**: Obsidian Workflow Mode.
-
-**Implementation scope**: New parser variant in `src/parser/`. Detect file extension and route to appropriate parser in `converter.ts`.
-
 ### Expanded Test Coverage
 
 Close the gaps in the current test suite.
@@ -163,11 +193,9 @@ Close the gaps in the current test suite.
 - **MiroClient integration tests**: Test retry logic, rate limiting, error interceptor with realistic HTTP responses
 - **Connector edge cases**: Test with lines (not just arrows), multi-segment connectors, connectors between frames
 - **ESLint setup**: Add eslint config, fix any issues, integrate into CI
-- **Parser failure modes**: Invalid JSON, missing required fields, corrupted file data
-
-**Enables**: Confidence in all features above. Foundation for CI/CD gating.
-
-**Implementation scope**: New test files. Add eslint config. Update `package.json` scripts.
+- **Parser failure modes**: Invalid JSON, missing required fields, corrupted `.excalidraw.md` files
+- **Style profile tests**: Verify override application, preserveOriginalStyles behavior
+- **Import mode tests**: Test update/upsert with mock Miro API responses
 
 ---
 
@@ -183,8 +211,6 @@ Abstract the Miro-specific layer so the same parser and mapper pipeline can outp
 - Introduce intermediate representation between mappers and targets
 
 **Enables user feature**: Cross-Tool Diagram Hub.
-
-**Implementation scope**: Major refactor. Current mappers return `MiroCreateShapeRequest` etc. — these need to return a target-agnostic intermediate type that gets translated per-target.
 
 ### Conversion State Store
 
@@ -212,7 +238,7 @@ Replace the hardcoded 100ms delay with dynamic rate limiting.
 Make the tool usable in automated pipelines.
 
 - Exit codes: 0 for success, 1 for partial failure, 2 for complete failure
-- JSON output mode for machine consumption
+- JSON output mode for machine consumption (done : Done)
 - Webhook notification on completion (configurable URL)
 - GitHub Action wrapper
 
@@ -224,16 +250,16 @@ Make the tool usable in automated pipelines.
 
 Which engineering features are prerequisites for which user features:
 
-| User Feature | Required Engineering |
-|---|---|
-| Import Preview | Dry-run mode, Structured error codes |
-| Shareable Summary Card | Structured error codes, Output formatters |
-| Presets | Config file support |
-| Guided Import | Interactive CLI prompts |
-| Cleanup Suggestions | Structured error codes, Miro update API |
-| Smart Re-Import | ID map persistence, Miro update API |
-| Obsidian Mode | Obsidian format parser, Batch conversion |
-| Style Profiles | Config file support |
-| Connector Repair | Miro update API, Interactive CLI prompts |
-| Cross-Tool Hub | Multi-target adapter architecture |
-| Version Timeline | Conversion state store |
+| User Feature | Required Engineering | Status |
+|---|---|---|
+| Import Preview | Dry-run mode, Structured error codes | : Done Done (error codes still free-text) |
+| Shareable Summary Card | Output formatters | : Done Done |
+| Presets | Preset configs in server + CLI | : Done Done |
+| Guided Import | Interactive CLI prompts | : Done Done |
+| Cleanup Suggestions | Cleanup suggestion engine | : Done Done |
+| Smart Re-Import | ID map persistence, Miro update API | : Done Done |
+| Obsidian Mode | Obsidian format parser, Batch conversion | : Done Done |
+| Style Profiles | Style profile system | : Done Done |
+| Connector Repair | Miro update API, Interactive CLI prompts | : Done Done |
+| Cross-Tool Hub | Multi-target adapter architecture | Not started |
+| Version Timeline | Conversion state store | Not started |
