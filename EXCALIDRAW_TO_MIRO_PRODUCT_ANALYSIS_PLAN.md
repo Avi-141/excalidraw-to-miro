@@ -35,95 +35,88 @@
 - Public API/CLI surface: `src/index.ts`, `src/cli.ts`
 - Conversion guarantees and gaps: `src/__tests__/real-file.test.ts` and related mapper tests
 
-## Prioritized Roadmap (Detailed)
+## Prioritized Roadmap (User-Facing)
 
-### Near-Term Quick Wins (0-2 months)
+### Near-Term User Wins (0-2 months)
 
-- **Dry-run mode with import report (`--dry-run`)**
-  - Show projected created/skipped/failed elements before writing to Miro.
-  - Output machine-readable JSON and human-readable summary.
-  - Why: Reduces risk and boosts trust for first-time migrations.
+- **Import Preview Experience**
+  - Before import, show a visual preview of what will be created in Miro (what looks perfect, what may degrade, what will be skipped).
+  - Why users care: no surprises, higher confidence on first run.
 
-- **Stronger diagnostics and recovery**
-  - Add structured skip/error codes and actionable remediation tips.
-  - Introduce retry with backoff for transient Miro API failures.
-  - Why: Improves reliability without changing core mapping logic.
+- **One-Click Cleanup Suggestions**
+  - After import, present "fix now" actions such as reconnect skipped arrows, merge orphan text, and normalize sizes.
+  - Why users care: saves immediate manual cleanup time.
 
-- **Batch conversion support**
-  - Add `--in-glob` and per-file output summaries.
-  - Support "continue on error" and final aggregate report.
-  - Why: Useful for teams migrating many diagrams at once.
+- **Presets for Common Use Cases**
+  - Provide presets like "Architecture Diagram," "Workshop Board," and "Product Flow" that tune import behavior.
+  - Why users care: easier onboarding than many technical flags.
 
-- **Expanded parser and mapper coverage**
-  - Add tests for parser file I/O failures, connector edge cases, and image geometry parity.
-  - Add stronger contract tests against current Miro payloads.
-  - Why: Converts current "works for common case" into more predictable behavior.
+- **Shareable Import Summary Card**
+  - Generate a human-friendly summary users can paste in Slack/Notion/Jira: imported counts, skipped counts, and board link.
+  - Why users care: improves team communication and handoff.
 
-- **Config file support**
-  - Add `.excal2mirorc` or JSON/YAML config to avoid long CLI flags.
-  - Why: Better repeatability for CI and teams.
+- **Beginner-Friendly Guided Import**
+  - Step-by-step flow with tooltips and examples for token, board selection, and options.
+  - Why users care: reduces setup friction for non-developers.
 
 ### Mid-Term Workflow Features (2-6 months)
 
-- **Incremental re-import / sync-lite**
-  - Preserve Excalidraw ID to Miro ID mappings and update changed items only.
-  - Add `--mode=create|update|upsert`.
-  - Why: Biggest workflow unlock for living diagrams.
+- **Smart Re-Import for Living Diagrams**
+  - Users can update an existing Miro board from newer Excalidraw versions without rebuilding everything.
+  - Why users care: supports iterative workflows and recurring design reviews.
 
-- **Grouping and hierarchy improvements**
-  - Emulate Excalidraw groups using Miro-compatible parent/tag conventions.
-  - Improve frame-child relative placement and nested frame behavior.
-  - Why: Preserves mental model of large diagrams.
+- **Comments and Notes Preservation**
+  - Convert Excalidraw links/notes into Miro-friendly annotations (comments, metadata cards, or linked notes).
+  - Why users care: keeps discussion context and decision history.
 
-- **Text and style fidelity upgrades**
-  - Improve vertical alignment, multiline behavior, and additional style mappings where possible.
-  - Add optional "normalize style to team preset" mode.
-  - Why: Reduces post-import cleanup effort.
+- **Obsidian Workflow Mode**
+  - Better support for Excalidraw files coming from Obsidian vaults, including bulk import by folder/tag.
+  - Why users care: bridges personal knowledge workflows to collaborative boards.
 
-- **Obsidian-aware ingestion**
-  - Handle Excalidraw plugin export conventions and vault batch import patterns.
-  - Why: Obsidian plus Excalidraw is a common technical documentation workflow.
+- **Team Style Profiles**
+  - Let teams define import style profiles (fonts, colors, connector styles) to match their Miro standards.
+  - Why users care: consistent board aesthetics across contributors.
 
-- **Connector intelligence v2**
-  - Better endpoint inference for hard cases and optional "nearest valid fallback" mode.
-  - Why: Connectors are core to architecture diagrams and often highest pain point.
+- **Connector Repair UI**
+  - Interactive UI to resolve skipped or ambiguous connectors by selecting target shapes visually.
+  - Why users care: eliminates one of the biggest post-import pain points.
 
-### Longer-Term Platform Bets (6-12+ months)
+### Longer-Term Product Bets (6-12+ months)
 
-- **Bi-directional synchronization (selective scope)**
-  - Start with one-way plus conflict detection, then opt-in two-way for supported primitives.
-  - Why: Strong differentiation versus format-only converters.
+- **Bi-Directional Workspace Sync**
+  - Keep supported objects synchronized between Excalidraw and Miro for hybrid teams.
+  - Why users care: they can work in their preferred tool without divergence.
 
-- **Multi-target converter architecture**
-  - Introduce target adapters (Miro first, then Mural/FigJam/Lucid-ready abstraction).
-  - Why: Expands TAM and makes project future-proof.
+- **Cross-Tool Diagram Hub**
+  - Expand beyond Miro with user-facing imports/exports for Mural, FigJam, and Lucid while preserving collaboration metadata.
+  - Why users care: less vendor lock-in and easier org-wide adoption.
 
-- **Hosted conversion service**
-  - Team UI for queues, audit logs, conversion history, and policy-controlled runs.
-  - Why: Enterprise teams need governance, observability, and scale.
+- **Version Timeline and Compare**
+  - Show visual diffs between import versions and allow easy rollback.
+  - Why users care: safer experimentation and better change tracking.
 
-- **Template and semantic mapping layer**
-  - Map diagram intent (service, DB, queue, actor) to curated Miro templates/components.
-  - Why: Moves from "import tool" to "collaboration accelerator."
+- **Template-to-Template Conversion**
+  - Map Excalidraw structures directly to Miro workshop templates (journey map, event storming, architecture review boards).
+  - Why users care: faster start for facilitation and planning sessions.
 
-- **Quality scoring and AI-assisted repair**
-  - Automatic post-conversion quality score plus suggested fixes for mismatches.
-  - Why: Shortens manual rework and builds confidence in automation.
+- **AI Assistant for Diagram Refinement**
+  - Suggest board cleanup, grouping, naming, and readability improvements after import.
+  - Why users care: improves clarity and collaboration quality at scale.
 
-## Release Themes and Success Metrics
+## Release Themes and User-Centric Success Metrics
 
-### Release Theme 1: Reliable Migration Foundation
+### Release Theme 1: Trust and First-Run Delight
 
-- Includes: dry-run, import report, retries, batch mode, diagnostics.
+- Includes: import preview, guided setup, one-click cleanup, summary card.
 - Success metrics:
-  - Import success rate >= 95% on supported elements.
-  - 50% reduction in "unknown failure" errors.
-  - Median post-import manual cleanup time reduced by 30%.
+  - First-time successful import rate >= 90%.
+  - Time-to-first-usable-board reduced by 40%.
+  - User satisfaction (post-import prompt) >= 4.2/5.
 
-### Release Theme 2: Living Diagram Workflows
+### Release Theme 2: Repeat Collaboration Workflows
 
-- Includes: incremental re-import, sync-lite modes, better hierarchy and connectors.
+- Includes: smart re-import, style profiles, connector repair UI, Obsidian mode.
 - Success metrics:
-  - >= 60% of repeat users adopt update/upsert mode.
-  - >= 40% fewer recreated items on second import.
-  - Connector preservation rate >= 90% on bound arrows.
+  - Repeat import usage (same board) >= 50% of active users.
+  - Manual post-import edits reduced by 35%.
+  - Connector resolution success >= 95% after assisted repair flow.

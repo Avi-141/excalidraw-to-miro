@@ -14,7 +14,7 @@ import {
  * parser, and converter code-path is exercised with production data.
  */
 
-const FIXTURE = path.resolve(__dirname, '..', '..', 'routing.excalidraw');
+const FIXTURE = path.resolve(__dirname, '..', '..', 'sample_excalidraw_files', 'routing.excalidraw');
 
 // ── Mock the Miro API client ──────────────────────────────────────
 

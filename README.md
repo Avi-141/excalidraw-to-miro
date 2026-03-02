@@ -14,6 +14,12 @@ Convert Excalidraw drawings to editable Miro board objects via the Miro REST API
 
 Shapes, colors, text, connectors, and layout are preserved. Text inside shapes is automatically merged into shape content rather than created as separate overlapping items.
 
+**Web UI**
+
+![Web UI](assets/demo-web-ui.png)
+
+A guided web interface with import preview, presets, and shareable summary cards.
+
 ## Features
 
 - **Shapes**: Rectangles, ellipses, and diamonds become editable Miro shapes
@@ -25,6 +31,11 @@ Shapes, colors, text, connectors, and layout are preserved. Text inside shapes i
 - **Styles**: Stroke colors, fill colors, border styles, and opacity
 - **Auto-centering**: Content is automatically centered on the Miro board
 - **Smart snapping**: Unbound arrow endpoints snap to nearby shapes
+
+- **Web UI**: Guided 4-step import flow with drag-and-drop upload
+- **Import Preview**: See exactly what will be created, skipped, or degraded before writing to Miro
+- **Presets**: Architecture Diagram, Workshop Board, and Product Flow import presets
+- **Summary Card**: Copy a Markdown summary to share in Slack, Notion, or Jira
 
 ## Installation
 
@@ -58,6 +69,25 @@ https://miro.com/app/board/uXjVN1234567=/
 ```
 
 ## Usage
+
+### Web UI
+
+```bash
+# Start the API server
+npm run dev:server
+
+# In another terminal, start the web UI
+npm run dev:web
+```
+
+Open `http://localhost:5173` and follow the guided flow:
+
+1. **Connect** — Enter your Miro API token and board ID
+2. **Upload** — Drop your `.excalidraw` file and pick an import preset
+3. **Preview** — Review what will be created, skipped, or imported with reduced fidelity
+4. **Convert** — Run the import and get results with a copyable summary card
+
+For production, `npm run build` compiles everything, then `npm run start:server` serves the API and static frontend together on port 3000.
 
 ### CLI
 
@@ -262,8 +292,16 @@ src/
 ├── types/               # TypeScript types
 │   ├── excalidraw.ts
 │   └── miro.ts
+├── server.ts            # Express API server for web UI
 ├── cli.ts               # CLI entry point
 └── index.ts             # Library exports
+web/
+├── src/
+│   ├── App.tsx          # Main React component (4-step guided flow)
+│   ├── main.tsx         # React entry point
+│   └── index.css        # Tailwind styles
+├── index.html           # HTML entry point
+└── vite.config.ts       # Vite + Tailwind config
 ```
 
 ## License
