@@ -1,7 +1,7 @@
 {
   "name": "excalidraw-to-miro",
   "version": "1.0.0",
-  "description": "Convert Excalidraw drawings to editable Miro board objects",
+  "description": "Excalidraw to Miro converter — import .excalidraw diagrams as editable Miro board shapes, connectors, text, images, and frames via the Miro REST API. CLI + Web UI.",
   "main": "dist/index.js",
   "bin": {
     "excal2miro": "./dist/cli.js"
@@ -22,8 +22,18 @@
     "excalidraw",
     "miro",
     "converter",
+    "excalidraw-to-miro",
+    "excalidraw-converter",
+    "excalidraw-importer",
+    "miro-converter",
+    "miro-api",
     "diagram",
-    "whiteboard"
+    "diagram-converter",
+    "whiteboard",
+    "obsidian",
+    "obsidian-excalidraw",
+    "cli",
+    "web-ui"
   ],
   "author": "",
   "license": "MIT",

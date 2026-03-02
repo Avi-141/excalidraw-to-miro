@@ -1,30 +1,35 @@
-# excalidraw-to-miro
+# Excalidraw to Miro Converter
 
-Convert Excalidraw drawings to editable Miro board objects via the Miro REST API.
+Convert Excalidraw diagrams to editable Miro board objects. Import `.excalidraw` files into Miro with full support for shapes, connectors, text, images, freedraw, and frames — preserving styles, colors, and layout. Available as a CLI tool, Node.js library, and web UI.
+
+> **Looking for an Excalidraw-to-Miro importer?** This is the only tool that converts Excalidraw drawings into native, editable Miro items via the Miro REST API — not screenshots or static images, but real shapes, connectors, and text you can edit on your board.
 
 ## Demo
 
-**Excalidraw (input)**
+**Excalidraw (input) to Miro (output)**
 
-![Excalidraw input](assets/demo-excalidraw.png)
-
-**Miro (output)**
-
-![Miro output](assets/demo-miro.png)
+| Excalidraw | Miro |
+|:---:|:---:|
+| ![Excalidraw input](assets/demo-excalidraw.png) | ![Miro output](assets/demo-miro.png) |
 
 Shapes, colors, text, connectors, and layout are preserved. Text inside shapes is automatically merged into shape content rather than created as separate overlapping items.
 
-**Web UI — Upload & Configure**
+**Web UI — Upload, Configure & Convert**
 
-![Web UI — Upload workflow](assets/demo-upload-workflow.png)
+| Upload & Configure | Conversion Results |
+|:---:|:---:|
+| ![Web UI — Upload workflow](assets/demo-upload-workflow.png) | ![Web UI — Cleanup suggestions](assets/demo-cleanup-suggestions.png) |
 
-A guided web interface with drag-and-drop upload, import presets, and style profiles.
+Guided 4-step web interface with drag-and-drop upload, import presets, style profiles, and post-conversion cleanup suggestions.
 
-**Web UI — Conversion Results & Cleanup Suggestions**
+## Why excalidraw-to-miro?
 
-![Web UI — Cleanup suggestions](assets/demo-cleanup-suggestions.png)
-
-After conversion, actionable cleanup suggestions highlight elements that may need manual review on the Miro board.
+- **Native Miro objects** — Not screenshots. Your Excalidraw shapes, text, and connectors become real, editable Miro items.
+- **Full element support** — Rectangles, ellipses, diamonds, arrows, lines, images, freedraw strokes, and frames all convert.
+- **Style fidelity** — Colors, fonts, stroke styles, opacity, and fill patterns carry over.
+- **Smart layout** — Auto-centering, arrow snapping, table/grid detection, and text-shape merging.
+- **Multiple interfaces** — CLI for automation and scripting, web UI for one-off imports, Node.js API for integration.
+- **Obsidian compatible** — Import `.excalidraw.md` files directly from your Obsidian vault.
 
 ## Features
 
