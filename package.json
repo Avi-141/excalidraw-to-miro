@@ -1,0 +1,41 @@
+{
+  "name": "excalidraw-to-miro",
+  "version": "1.0.0",
+  "description": "Convert Excalidraw drawings to editable Miro board objects",
+  "main": "dist/index.js",
+  "bin": {
+    "excal2miro": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "dev": "ts-node src/cli.ts",
+    "lint": "eslint src/**/*.ts",
+    "test": "jest"
+  },
+  "keywords": [
+    "excalidraw",
+    "miro",
+    "converter",
+    "diagram",
+    "whiteboard"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.7.0",
+    "commander": "^12.1.0",
+    "form-data": "^4.0.5"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.14.0",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
