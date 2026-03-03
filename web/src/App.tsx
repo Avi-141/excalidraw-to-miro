@@ -22,6 +22,7 @@ interface PreviewResult {
     images: number;
     freedraw: number;
     frames: number;
+    groups: number;
   };
 }
 
@@ -39,6 +40,7 @@ interface ConversionResult {
   itemsCreated: number;
   connectorsCreated: number;
   framesCreated: number;
+  groupsCreated: number;
   imagesCreated: number;
   freedrawConverted: number;
   skippedElements: Array<{ id: string; type: string; reason: string }>;
@@ -175,6 +177,7 @@ export default function App() {
       `| Connectors | ${result.connectorsCreated} |`,
     ];
     if (result.framesCreated > 0) lines.push(`| Frames | ${result.framesCreated} |`);
+    if (result.groupsCreated > 0) lines.push(`| Groups | ${result.groupsCreated} |`);
     if (result.imagesCreated > 0) lines.push(`| Images | ${result.imagesCreated} |`);
     if (result.freedrawConverted > 0) lines.push(`| Freedraw | ${result.freedrawConverted} |`);
     if (result.skippedElements.length > 0) lines.push(`| Skipped | ${result.skippedElements.length} |`);
@@ -418,6 +421,7 @@ export default function App() {
                 {preview.breakdown.images > 0 && <><span className="text-gray-400">Images</span><span className="text-gray-200 col-span-2">{preview.breakdown.images}</span></>}
                 {preview.breakdown.freedraw > 0 && <><span className="text-gray-400">Freedraw</span><span className="text-gray-200 col-span-2">{preview.breakdown.freedraw}</span></>}
                 {preview.breakdown.frames > 0 && <><span className="text-gray-400">Frames</span><span className="text-gray-200 col-span-2">{preview.breakdown.frames}</span></>}
+                {preview.breakdown.groups > 0 && <><span className="text-gray-400">Groups</span><span className="text-gray-200 col-span-2">{preview.breakdown.groups}</span></>}
               </div>
             </div>
 
@@ -488,6 +492,7 @@ export default function App() {
                 <div><span className="text-gray-400">Items created</span><span className="float-right text-gray-200">{result.itemsCreated}</span></div>
                 <div><span className="text-gray-400">Connectors</span><span className="float-right text-gray-200">{result.connectorsCreated}</span></div>
                 {result.framesCreated > 0 && <div><span className="text-gray-400">Frames</span><span className="float-right text-gray-200">{result.framesCreated}</span></div>}
+                {result.groupsCreated > 0 && <div><span className="text-gray-400">Groups</span><span className="float-right text-gray-200">{result.groupsCreated}</span></div>}
                 {result.imagesCreated > 0 && <div><span className="text-gray-400">Images</span><span className="float-right text-gray-200">{result.imagesCreated}</span></div>}
                 {result.freedrawConverted > 0 && <div><span className="text-gray-400">Freedraw</span><span className="float-right text-gray-200">{result.freedrawConverted}</span></div>}
                 {result.skippedElements.length > 0 && <div><span className="text-gray-400">Skipped</span><span className="float-right text-yellow-400">{result.skippedElements.length}</span></div>}

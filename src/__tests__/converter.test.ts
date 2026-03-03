@@ -20,6 +20,7 @@ jest.mock('../api', () => {
 });
 
 let idCounter: number;
+let groupIdCounter: number;
 const mockClient = {
   getBoard: jest.fn(),
   createShape: jest.fn(),
@@ -27,11 +28,13 @@ const mockClient = {
   createConnector: jest.fn(),
   createImage: jest.fn(),
   createFrame: jest.fn(),
+  createGroup: jest.fn(),
   updateItemParent: jest.fn(),
 };
 
 function resetMocks() {
   idCounter = 1;
+  groupIdCounter = 1;
   mockClient.getBoard.mockResolvedValue({ id: 'board-1', name: 'Test Board' });
   mockClient.createShape.mockImplementation(() =>
     Promise.resolve({ id: `miro-shape-${idCounter++}`, type: 'shape' })
@@ -47,6 +50,9 @@ function resetMocks() {
   );
   mockClient.createFrame.mockImplementation(() =>
     Promise.resolve({ id: `miro-frame-${idCounter++}`, type: 'frame' })
+  );
+  mockClient.createGroup.mockImplementation(() =>
+    Promise.resolve({ id: `miro-group-${groupIdCounter++}`, type: 'group' })
   );
   mockClient.updateItemParent.mockResolvedValue(undefined);
   Object.values(mockClient).forEach((fn) => (fn as jest.Mock).mockClear());
@@ -427,6 +433,153 @@ describe('Converter', () => {
 
       expect(result.itemsCreated).toBe(1);
       expect(result.errors).toHaveLength(1);
+    });
+  });
+
+  describe('group mapping', () => {
+    it('creates Miro groups from Excalidraw groupIds', async () => {
+      const r1 = makeRect({ id: 'r1', groupIds: ['g1'] });
+      const r2 = makeEllipse({ id: 'r2', groupIds: ['g1'] });
+      const file = makeExcalidrawFile([r1, r2]);
+      const filePath = writeFixtureFile(file);
+
+      const converter = new Converter({ miroToken: 'test', boardId: 'b' });
+      const result = await converter.convert(filePath);
+
+      expect(result.groupsCreated).toBe(1);
+      expect(mockClient.createGroup).toHaveBeenCalledTimes(1);
+      const groupCall = mockClient.createGroup.mock.calls[0][1];
+      expect(groupCall.data.items).toHaveLength(2);
+    });
+
+    it('skips groups with fewer than 2 resolvable items', async () => {
+      const r1 = makeRect({ id: 'r1', groupIds: ['g1'] });
+      const file = makeExcalidrawFile([r1]);
+      const filePath = writeFixtureFile(file);
+
+      const converter = new Converter({ miroToken: 'test', boardId: 'b' });
+      const result = await converter.convert(filePath);
+
+      expect(result.groupsCreated).toBe(0);
+      expect(mockClient.createGroup).not.toHaveBeenCalled();
+    });
+
+    it('creates multiple groups for separate groupIds', async () => {
+      const r1 = makeRect({ id: 'r1', groupIds: ['g1'] });
+      const r2 = makeEllipse({ id: 'r2', groupIds: ['g1'] });
+      const t1 = makeText({ id: 't1', groupIds: ['g2'] });
+      const t2 = makeText({ id: 't2', text: 'Another', groupIds: ['g2'], x: 400, y: 400 });
+      const file = makeExcalidrawFile([r1, r2, t1, t2]);
+      const filePath = writeFixtureFile(file);
+
+      const converter = new Converter({ miroToken: 'test', boardId: 'b' });
+      const result = await converter.convert(filePath);
+
+      expect(result.groupsCreated).toBe(2);
+      expect(mockClient.createGroup).toHaveBeenCalledTimes(2);
+    });
+
+    it('handles nested groups (element in multiple groupIds)', async () => {
+      const r1 = makeRect({ id: 'r1', groupIds: ['inner', 'outer'] });
+      const r2 = makeEllipse({ id: 'r2', groupIds: ['inner', 'outer'] });
+      const r3 = makeRect({ id: 'r3', x: 500, y: 500, width: 100, height: 100, groupIds: ['outer'] });
+      const file = makeExcalidrawFile([r1, r2, r3]);
+      const filePath = writeFixtureFile(file);
+
+      const converter = new Converter({ miroToken: 'test', boardId: 'b' });
+      const result = await converter.convert(filePath);
+
+      expect(result.groupsCreated).toBe(2);
+      expect(mockClient.createGroup).toHaveBeenCalledTimes(2);
+
+      const firstCall = mockClient.createGroup.mock.calls[0][1];
+      const secondCall = mockClient.createGroup.mock.calls[1][1];
+      expect(firstCall.data.items).toHaveLength(2);
+      expect(secondCall.data.items).toHaveLength(3);
+    });
+
+    it('does not group items with empty groupIds', async () => {
+      const r1 = makeRect({ id: 'r1', groupIds: [] });
+      const r2 = makeEllipse({ id: 'r2', groupIds: [] });
+      const file = makeExcalidrawFile([r1, r2]);
+      const filePath = writeFixtureFile(file);
+
+      const converter = new Converter({ miroToken: 'test', boardId: 'b' });
+      const result = await converter.convert(filePath);
+
+      expect(result.groupsCreated).toBe(0);
+      expect(mockClient.createGroup).not.toHaveBeenCalled();
+    });
+
+    it('records error when group API call fails', async () => {
+      mockClient.createGroup.mockRejectedValueOnce(new Error('Group API error'));
+      const r1 = makeRect({ id: 'r1', groupIds: ['g1'] });
+      const r2 = makeEllipse({ id: 'r2', groupIds: ['g1'] });
+      const file = makeExcalidrawFile([r1, r2]);
+      const filePath = writeFixtureFile(file);
+
+      const converter = new Converter({ miroToken: 'test', boardId: 'b' });
+      const result = await converter.convert(filePath);
+
+      expect(result.groupsCreated).toBe(0);
+      expect(result.errors).toEqual(
+        expect.arrayContaining([expect.stringContaining('Failed to create group')])
+      );
+    });
+
+    it('groups are created after connectors (Phase 3)', async () => {
+      const callOrder: string[] = [];
+      mockClient.createConnector.mockImplementation(() => {
+        callOrder.push('connector');
+        return Promise.resolve({ id: `miro-conn-${idCounter++}`, type: 'connector' });
+      });
+      mockClient.createGroup.mockImplementation(() => {
+        callOrder.push('group');
+        return Promise.resolve({ id: `miro-group-${groupIdCounter++}`, type: 'group' });
+      });
+
+      const r1 = makeRect({ id: 'r1', groupIds: ['g1'] });
+      const r2 = makeEllipse({ id: 'r2', groupIds: ['g1'] });
+      const arrow = makeArrow({
+        id: 'a1',
+        startBinding: { elementId: 'r1', focus: 0, gap: 5 },
+        endBinding: { elementId: 'r2', focus: 0, gap: 5 },
+      });
+      const file = makeExcalidrawFile([r1, r2, arrow]);
+      const filePath = writeFixtureFile(file);
+
+      const converter = new Converter({ miroToken: 'test', boardId: 'b' });
+      await converter.convert(filePath);
+
+      expect(callOrder.indexOf('connector')).toBeLessThan(callOrder.indexOf('group'));
+    });
+  });
+
+  describe('group preview', () => {
+    it('includes groups in preview breakdown', () => {
+      const r1 = makeRect({ id: 'r1', groupIds: ['g1'] });
+      const r2 = makeEllipse({ id: 'r2', groupIds: ['g1'] });
+      const file = makeExcalidrawFile([r1, r2]);
+
+      const converter = new Converter({ miroToken: 'test', boardId: 'b' });
+      const preview = converter.preview(JSON.stringify(file));
+
+      expect(preview.breakdown.groups).toBe(1);
+      const groupEl = preview.elements.find((e) => e.type === 'group');
+      expect(groupEl).toBeDefined();
+      expect(groupEl!.status).toBe('will_create');
+    });
+
+    it('marks groups as will_skip when insufficient members', () => {
+      const r1 = makeRect({ id: 'r1', groupIds: ['g1'] });
+      const file = makeExcalidrawFile([r1]);
+
+      const converter = new Converter({ miroToken: 'test', boardId: 'b' });
+      const preview = converter.preview(JSON.stringify(file));
+
+      const groupEl = preview.elements.find((e) => e.type === 'group');
+      expect(groupEl).toBeDefined();
+      expect(groupEl!.status).toBe('will_skip');
     });
   });
 

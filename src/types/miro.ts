@@ -256,6 +256,21 @@ export interface MiroFrameItem extends MiroItem {
   style?: MiroFrameStyle;
 }
 
+// Group types
+export interface MiroCreateGroupRequest {
+  data: {
+    items: string[];
+  };
+}
+
+export interface MiroGroupItem {
+  id: string;
+  type: 'group';
+  data: {
+    items: string[];
+  };
+}
+
 // Update item parent
 export interface MiroUpdateItemRequest {
   parent?: { id: string };

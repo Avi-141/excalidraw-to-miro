@@ -40,6 +40,7 @@ Guided 4-step web interface with drag-and-drop upload, import presets, style pro
 - **Images**: Embedded images are extracted and uploaded to Miro
 - **Freedraw**: Hand-drawn strokes are converted to SVG and uploaded as images
 - **Frames**: Excalidraw frames become Miro frames with children properly attached
+- **Groups**: Excalidraw visual groups (`groupIds`) are preserved as native Miro groups, including nested groups
 - **Styles**: Stroke colors, fill colors, border styles, and opacity
 - **Auto-centering**: Content is automatically centered on the Miro board
 - **Smart snapping**: Unbound arrow endpoints snap to nearby shapes
@@ -210,6 +211,7 @@ console.log(`Freedraw converted: ${result.freedrawConverted}`);
 | `freedraw` | Image (SVG conversion) |
 | `image` | Image (uploaded from embedded data) |
 | `frame` | Frame (with children attached) |
+| `groupIds` | Group (via Miro Groups API) |
 
 ## Text Handling
 
@@ -255,7 +257,7 @@ Excalidraw frames are converted to Miro frames:
 - Frame title/name is preserved
 - Miro frames don't support rotation; rotated frames are created without rotation
 
-**Note**: Excalidraw `groupIds` (visual selection groups) are not converted, as Miro has no equivalent REST API concept. Only frames are mapped.
+**Group support**: Excalidraw `groupIds` (visual selection groups) are converted to native Miro groups via the [Miro Groups API](https://developers.miro.com/reference/creategroup). Nested groups (elements with multiple `groupIds`) are created innermost-first. Groups require at least 2 successfully created items; groups with fewer members are skipped with a cleanup suggestion.
 
 ## Connector Behavior
 
@@ -284,6 +286,7 @@ The converter processes elements in a specific order to maintain references:
 2. **Phase 1**: Create shapes, text, images, and freedraw SVGs
 3. **Phase 1d**: Attach child items to their parent frames
 4. **Phase 2**: Create connectors (which reference shapes by Miro ID)
+5. **Phase 3**: Create groups from `groupIds` (all items must exist first)
 
 ## Coordinate System
 
