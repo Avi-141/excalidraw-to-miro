@@ -13,6 +13,8 @@ import {
   PreviewResult,
   IdMap,
   DEFAULT_OPTIONS,
+  SkipCode,
+  SKIP_REMEDIATION,
 } from '../types';
 import {
   parseExcalidrawFile,
@@ -74,6 +76,59 @@ export class Converter {
     }
   }
 
+  private addSkipped(
+    result: ConversionResult,
+    id: string,
+    type: string,
+    code: SkipCode,
+    reasonOverride?: string
+  ): void {
+    result.skippedElements.push({
+      id,
+      type,
+      code,
+      reason: reasonOverride ?? this.getSkipReason(code),
+      remediation: SKIP_REMEDIATION[code],
+    });
+  }
+
+  private getSkipReason(code: SkipCode): string {
+    switch (code) {
+      case 'CONNECTOR_SELF_REF':
+        return 'Self-referencing connector';
+      case 'CONNECTOR_NO_TARGET':
+        return 'Connector endpoint did not resolve to a target shape';
+      case 'CONNECTOR_INVALID':
+        return 'Invalid connector configuration';
+      case 'CONNECTOR_DISABLED':
+        return 'Connector creation disabled';
+      case 'IMAGE_NOT_FOUND':
+        return 'Image file data not found in .excalidraw';
+      case 'IMAGE_NOT_SAVED':
+        return 'Image status is not "saved"';
+      case 'IMAGE_TOO_LARGE':
+        return 'Image exceeds 6 MB Miro upload limit';
+      case 'IMAGE_NO_FILES':
+        return 'No embedded files in .excalidraw file';
+      case 'FREEDRAW_TOO_SHORT':
+        return 'Freedraw has fewer than 2 points';
+      case 'FREEDRAW_DISABLED':
+        return 'Freedraw conversion disabled';
+      case 'IMAGE_DISABLED':
+        return 'Image conversion disabled';
+      case 'FRAME_DISABLED':
+        return 'Frame conversion disabled';
+      case 'TYPE_UNSUPPORTED':
+        return 'Element type not supported';
+      case 'MAPPED_ITEM_MISSING_UPDATE':
+        return 'Mapped Miro item no longer exists (update mode)';
+      case 'MAPPING_MISSING_UPDATE':
+        return 'No existing mapping (update mode)';
+      default:
+        return 'Element skipped';
+    }
+  }
+
   private loadExistingMappings(): IdMap {
     if (!this.options.mappingFile) return {};
     try {
@@ -104,9 +159,6 @@ export class Converter {
     }
   }
 
-  /**
-   * Generate a preview of what would happen without calling the Miro API.
-   */
   preview(fileJson: string): PreviewResult {
     const file = parseExcalidrawJson(fileJson);
     const elements = getActiveElements(file);
@@ -153,7 +205,10 @@ export class Converter {
       if (!this.options.createConnectors) {
         previewElements.push({
           id: el.id, type: el.type, status: 'will_skip',
-          miroType: 'connector', reason: 'Connector creation disabled',
+          miroType: 'connector',
+          code: 'CONNECTOR_DISABLED',
+          reason: this.getSkipReason('CONNECTOR_DISABLED'),
+          remediation: SKIP_REMEDIATION['CONNECTOR_DISABLED'],
         });
       } else if (isConvertibleArrow(el) || isConvertibleLine(el)) {
         const hasStart = el.startBinding?.elementId;
@@ -161,7 +216,10 @@ export class Converter {
         if (hasStart && hasEnd && hasStart === hasEnd) {
           previewElements.push({
             id: el.id, type: el.type, status: 'will_skip',
-            miroType: 'connector', reason: 'Self-referencing arrow',
+            miroType: 'connector',
+            code: 'CONNECTOR_SELF_REF',
+            reason: this.getSkipReason('CONNECTOR_SELF_REF'),
+            remediation: SKIP_REMEDIATION['CONNECTOR_SELF_REF'],
           });
         } else if (!hasStart || !hasEnd) {
           previewElements.push({
@@ -182,7 +240,10 @@ export class Converter {
       if (!this.options.convertImages) {
         previewElements.push({
           id: el.id, type: 'image', status: 'will_skip',
-          miroType: 'image', reason: 'Image conversion disabled',
+          miroType: 'image',
+          code: 'IMAGE_DISABLED',
+          reason: this.getSkipReason('IMAGE_DISABLED'),
+          remediation: SKIP_REMEDIATION['IMAGE_DISABLED'],
         });
       } else if (isConvertibleImage(el)) {
         const imgEl = el as ExcalidrawImage;
@@ -190,7 +251,10 @@ export class Converter {
         if (!hasData) {
           previewElements.push({
             id: el.id, type: 'image', status: 'will_skip',
-            miroType: 'image', reason: 'Image data not found in file',
+            miroType: 'image',
+            code: 'IMAGE_NOT_FOUND',
+            reason: this.getSkipReason('IMAGE_NOT_FOUND'),
+            remediation: SKIP_REMEDIATION['IMAGE_NOT_FOUND'],
           });
         } else {
           previewElements.push({
@@ -205,14 +269,20 @@ export class Converter {
       if (!this.options.convertFreedraw || this.options.skipFreedraw) {
         previewElements.push({
           id: el.id, type: 'freedraw', status: 'will_skip',
-          miroType: 'image (SVG)', reason: 'Freedraw conversion disabled',
+          miroType: 'image (SVG)',
+          code: 'FREEDRAW_DISABLED',
+          reason: this.getSkipReason('FREEDRAW_DISABLED'),
+          remediation: SKIP_REMEDIATION['FREEDRAW_DISABLED'],
         });
       } else if (isConvertibleFreedraw(el)) {
         const fd = el as ExcalidrawFreedraw;
         if (fd.points.length < 2) {
           previewElements.push({
             id: el.id, type: 'freedraw', status: 'will_skip',
-            miroType: 'image (SVG)', reason: 'Fewer than 2 points',
+            miroType: 'image (SVG)',
+            code: 'FREEDRAW_TOO_SHORT',
+            reason: this.getSkipReason('FREEDRAW_TOO_SHORT'),
+            remediation: SKIP_REMEDIATION['FREEDRAW_TOO_SHORT'],
           });
         } else {
           previewElements.push({
@@ -228,7 +298,10 @@ export class Converter {
       if (!this.options.convertFrames) {
         previewElements.push({
           id: el.id, type: 'frame', status: 'will_skip',
-          miroType: 'frame', reason: 'Frame conversion disabled',
+          miroType: 'frame',
+          code: 'FRAME_DISABLED',
+          reason: this.getSkipReason('FRAME_DISABLED'),
+          remediation: SKIP_REMEDIATION['FRAME_DISABLED'],
         });
       } else if (isConvertibleFrame(el)) {
         const degraded = el.angle !== 0;
@@ -244,8 +317,32 @@ export class Converter {
     for (const el of groups.other) {
       previewElements.push({
         id: el.id, type: el.type, status: 'will_skip',
-        miroType: 'unsupported', reason: 'Element type not supported',
+        miroType: 'unsupported',
+        code: 'TYPE_UNSUPPORTED',
+        reason: this.getSkipReason('TYPE_UNSUPPORTED'),
+        remediation: SKIP_REMEDIATION['TYPE_UNSUPPORTED'],
       });
+    }
+
+    const excalidrawGroups = this.resolveExcalidrawGroups(elements);
+    for (const [gid, members] of excalidrawGroups) {
+      const resolvableCount = [...members].filter((eid) =>
+        previewElements.some((pe) => pe.id === eid && pe.status !== 'will_skip')
+      ).length;
+
+      if (resolvableCount >= 2) {
+        previewElements.push({
+          id: gid, type: 'group', status: 'will_create',
+          miroType: 'group',
+          fidelityNote: `${resolvableCount} of ${members.size} member(s) will be grouped`,
+        });
+      } else {
+        previewElements.push({
+          id: gid, type: 'group', status: 'will_skip',
+          miroType: 'group',
+          reason: `Need at least 2 created items, only ${resolvableCount} available`,
+        });
+      }
     }
 
     const willCreate = previewElements.filter((e) => e.status === 'will_create').length;
@@ -265,13 +362,11 @@ export class Converter {
         images: groups.images.length,
         freedraw: groups.freedraw.length,
         frames: groups.frames.length,
+        groups: excalidrawGroups.size,
       },
     };
   }
 
-  /**
-   * Convert from a JSON string instead of a file path.
-   */
   async convertJson(fileJson: string): Promise<ConversionResult> {
     const file = parseExcalidrawJson(fileJson);
 
@@ -282,6 +377,7 @@ export class Converter {
       itemsCreated: 0,
       connectorsCreated: 0,
       framesCreated: 0,
+      groupsCreated: 0,
       imagesCreated: 0,
       freedrawConverted: 0,
       skippedElements: [],
@@ -335,6 +431,8 @@ export class Converter {
         await this.createConnectors(allArrowsAndLines, elements, result);
       }
 
+      await this.createGroups(elements, result);
+
       this.handleSkippedElements(groups, result);
       this.generateCleanupSuggestions(groups, elements, result);
       result.success = result.errors.length === 0;
@@ -356,6 +454,7 @@ export class Converter {
       itemsCreated: 0,
       connectorsCreated: 0,
       framesCreated: 0,
+      groupsCreated: 0,
       imagesCreated: 0,
       freedrawConverted: 0,
       skippedElements: [],
@@ -429,6 +528,8 @@ export class Converter {
         this.log(`Creating ${allArrowsAndLines.length} connectors...`);
         await this.createConnectors(allArrowsAndLines, elements, result);
       }
+
+      await this.createGroups(elements, result);
 
       this.handleSkippedElements(groups, result);
       this.generateCleanupSuggestions(groups, elements, result);
@@ -530,11 +631,11 @@ export class Converter {
             result.itemsCreated++;
             continue;
           } else if (mode === 'update') {
-            result.skippedElements.push({ id: element.id, type: element.type, reason: 'Mapped Miro item no longer exists (update mode)' });
+            this.addSkipped(result, element.id, element.type, 'MAPPED_ITEM_MISSING_UPDATE');
             continue;
           }
         } else if (mode === 'update' && !existingMiroId) {
-          result.skippedElements.push({ id: element.id, type: element.type, reason: 'No existing mapping (update mode)' });
+          this.addSkipped(result, element.id, element.type, 'MAPPING_MISSING_UPDATE');
           continue;
         }
 
@@ -583,11 +684,11 @@ export class Converter {
             result.itemsCreated++;
             continue;
           } else if (mode === 'update') {
-            result.skippedElements.push({ id: element.id, type: 'text', reason: 'Mapped Miro item no longer exists (update mode)' });
+            this.addSkipped(result, element.id, 'text', 'MAPPED_ITEM_MISSING_UPDATE');
             continue;
           }
         } else if (mode === 'update' && !existingMiroId) {
-          result.skippedElements.push({ id: element.id, type: 'text', reason: 'No existing mapping (update mode)' });
+          this.addSkipped(result, element.id, 'text', 'MAPPING_MISSING_UPDATE');
           continue;
         }
 
@@ -632,10 +733,6 @@ export class Converter {
     }
   }
 
-  /**
-   * Pre-compute which texts would be merged, using the same heuristics
-   * as the actual conversion. Returns a set of text element IDs that will merge.
-   */
   private computeMergeableTexts(
     shapes: ExcalidrawElement[],
     textElements: ExcalidrawElement[]
@@ -686,20 +783,11 @@ export class Converter {
     return result;
   }
 
-  /**
-   * Determine whether an overlapping text should be merged into a shape.
-   * Rejects merging when the shape is a table-row background or banner:
-   * these are very wide, low-height rectangles with multiple small texts
-   * positioned across columns. Labeled shapes (boxes with titles inside)
-   * have moderate aspect ratios and text that fills a meaningful fraction.
-   */
   private shouldMergeText(_text: ExcalidrawText, shape: ExcalidrawElement): boolean {
     if (shape.width === 0 || shape.height === 0) return false;
 
     const aspectRatio = shape.width / shape.height;
 
-    // Shapes with aspect ratio > 6:1 are table rows / banners —
-    // texts on them are column values, not labels for the shape.
     if (aspectRatio > 6) return false;
 
     return true;
@@ -725,19 +813,17 @@ export class Converter {
       const extracted = extractImageBuffer(imgElement, file.files);
 
       if (!extracted) {
-        const reason = !file.files
-          ? 'No embedded files in .excalidraw file'
+        const code: SkipCode = !file.files
+          ? 'IMAGE_NO_FILES'
           : !file.files[imgElement.fileId]
-            ? 'Image file data not found in .excalidraw'
+            ? 'IMAGE_NOT_FOUND'
             : imgElement.status !== 'saved'
-              ? `Image status is "${imgElement.status}", not saved`
-              : 'Image exceeds 6 MB Miro upload limit';
-
-        result.skippedElements.push({
-          id: element.id,
-          type: element.type,
-          reason,
-        });
+              ? 'IMAGE_NOT_SAVED'
+              : 'IMAGE_TOO_LARGE';
+        const statusReason = imgElement.status !== 'saved'
+          ? `Image status is "${imgElement.status}", not saved`
+          : undefined;
+        this.addSkipped(result, element.id, element.type, code, statusReason);
         continue;
       }
 
@@ -771,11 +857,7 @@ export class Converter {
       const fdElement = element as ExcalidrawFreedraw;
 
       if (fdElement.points.length < 2) {
-        result.skippedElements.push({
-          id: element.id,
-          type: element.type,
-          reason: 'Freedraw has fewer than 2 points',
-        });
+        this.addSkipped(result, element.id, element.type, 'FREEDRAW_TOO_SHORT');
         continue;
       }
 
@@ -802,10 +884,6 @@ export class Converter {
     }
   }
 
-  /**
-   * After all items are created, attach items that belong to frames
-   * using the Excalidraw frameId -> Miro frame ID mapping.
-   */
   private async attachChildrenToFrames(
     allElements: ExcalidrawElement[],
     result: ConversionResult
@@ -843,11 +921,7 @@ export class Converter {
       if (!isConvertibleArrow(element) && !isConvertibleLine(element)) continue;
 
       if (!canConvertToConnector(element, result.idMap)) {
-        result.skippedElements.push({
-          id: element.id,
-          type: element.type,
-          reason: 'Cannot convert to connector',
-        });
+        this.addSkipped(result, element.id, element.type, 'CONNECTOR_INVALID');
         continue;
       }
 
@@ -860,11 +934,17 @@ export class Converter {
         );
 
         if (!request) {
-          result.skippedElements.push({
-            id: element.id,
-            type: element.type,
-            reason: 'Invalid connector configuration',
-          });
+          const isSelfRef =
+            element.type === 'arrow' &&
+            Boolean(element.startBinding?.elementId) &&
+            Boolean(element.endBinding?.elementId) &&
+            element.startBinding?.elementId === element.endBinding?.elementId;
+          this.addSkipped(
+            result,
+            element.id,
+            element.type,
+            isSelfRef ? 'CONNECTOR_SELF_REF' : 'CONNECTOR_NO_TARGET'
+          );
           continue;
         }
 
@@ -886,51 +966,112 @@ export class Converter {
     }
   }
 
+  private resolveExcalidrawGroups(
+    elements: ExcalidrawElement[]
+  ): Map<string, Set<string>> {
+    const groupMap = new Map<string, Set<string>>();
+
+    for (const el of elements) {
+      if (!el.groupIds || el.groupIds.length === 0) continue;
+
+      for (const gid of el.groupIds) {
+        let members = groupMap.get(gid);
+        if (!members) {
+          members = new Set<string>();
+          groupMap.set(gid, members);
+        }
+        members.add(el.id);
+      }
+    }
+
+    return groupMap;
+  }
+
+  /**
+   * Phase 3: Create Miro groups from Excalidraw groupIds.
+   * Processes innermost groups first (fewer members) so nested groups work.
+   */
+  private async createGroups(
+    allElements: ExcalidrawElement[],
+    result: ConversionResult
+  ): Promise<void> {
+    const excalidrawGroups = this.resolveExcalidrawGroups(allElements);
+
+    if (excalidrawGroups.size === 0) return;
+
+    this.log(`Found ${excalidrawGroups.size} Excalidraw group(s) to create`);
+
+    const sortedGroupIds = [...excalidrawGroups.entries()]
+      .sort((a, b) => a[1].size - b[1].size)
+      .map(([gid]) => gid);
+
+    for (const groupId of sortedGroupIds) {
+      const memberExcalidrawIds = excalidrawGroups.get(groupId)!;
+
+      const miroItemIds: string[] = [];
+      const missingIds: string[] = [];
+
+      for (const eid of memberExcalidrawIds) {
+        const miroId = result.idMap[eid];
+        if (miroId && miroId !== 'merged') {
+          miroItemIds.push(miroId);
+        } else {
+          missingIds.push(eid);
+        }
+      }
+
+      if (miroItemIds.length < 2) {
+        this.log(
+          `Skipping group ${groupId}: need at least 2 Miro items, got ${miroItemIds.length}` +
+          (missingIds.length > 0 ? ` (${missingIds.length} member(s) not created)` : '')
+        );
+        continue;
+      }
+
+      try {
+        const miroGroup = await this.client.createGroup(this.boardId, {
+          data: { items: miroItemIds },
+        });
+
+        result.idMap[`group:${groupId}`] = miroGroup.id;
+        result.groupsCreated++;
+
+        this.log(
+          `Created group (${groupId} -> ${miroGroup.id}) with ${miroItemIds.length} items`
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        result.errors.push(`Failed to create group ${groupId}: ${message}`);
+      }
+    }
+  }
+
   private handleSkippedElements(
     groups: ReturnType<typeof groupElementsByType>,
     result: ConversionResult
   ): void {
-    // Freedraw: only skip if not converted
     if (!this.options.convertFreedraw || this.options.skipFreedraw) {
       for (const el of groups.freedraw) {
         if (!result.idMap[el.id]) {
-          result.skippedElements.push({
-            id: el.id,
-            type: el.type,
-            reason: 'Freedraw conversion disabled',
-          });
+          this.addSkipped(result, el.id, el.type, 'FREEDRAW_DISABLED');
         }
       }
     }
 
-    // Images: only skip those that weren't converted
     if (!this.options.convertImages) {
       for (const el of groups.images) {
-        result.skippedElements.push({
-          id: el.id,
-          type: el.type,
-          reason: 'Image conversion disabled',
-        });
+        this.addSkipped(result, el.id, el.type, 'IMAGE_DISABLED');
       }
     }
 
-    // Frames: only skip if not converted
     if (!this.options.convertFrames) {
       for (const el of groups.frames) {
-        result.skippedElements.push({
-          id: el.id,
-          type: el.type,
-          reason: 'Frame conversion disabled',
-        });
+        this.addSkipped(result, el.id, el.type, 'FRAME_DISABLED');
       }
     }
 
     for (const el of groups.other) {
-      result.skippedElements.push({
-        id: el.id,
-        type: el.type,
-        reason: 'Element type not supported',
-      });
+      this.addSkipped(result, el.id, el.type, 'TYPE_UNSUPPORTED');
     }
 
     if (result.skippedElements.length > 0 && this.verbose) {
@@ -1015,6 +1156,26 @@ export class Converter {
         elementType: 'frame',
         suggestion: 'Miro frames do not support rotation. Review child element positions on the board.',
       });
+    }
+
+    const excalidrawGrps = this.resolveExcalidrawGroups(allElements);
+    for (const [groupId, members] of excalidrawGrps) {
+      const miroGroupId = result.idMap[`group:${groupId}`];
+      if (miroGroupId) continue;
+
+      const createdCount = [...members].filter((eid) => {
+        const mid = result.idMap[eid];
+        return mid && mid !== 'merged';
+      }).length;
+
+      if (createdCount > 0 && createdCount < 2) {
+        result.cleanupSuggestions.push({
+          category: 'layout',
+          severity: 'info',
+          message: `Group ${groupId.slice(0, 8)}... could not be created: only ${createdCount} of ${members.size} member(s) were imported`,
+          suggestion: 'Select the items on the Miro board and group them manually.',
+        });
+      }
     }
 
     const freedrawCount = groups.freedraw.filter((fd) => result.idMap[fd.id]).length;

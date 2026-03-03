@@ -1,6 +1,49 @@
 export * from './excalidraw';
 export * from './miro';
 
+export type SkipCode =
+  | 'CONNECTOR_SELF_REF'
+  | 'CONNECTOR_NO_TARGET'
+  | 'CONNECTOR_INVALID'
+  | 'CONNECTOR_DISABLED'
+  | 'IMAGE_NOT_FOUND'
+  | 'IMAGE_NOT_SAVED'
+  | 'IMAGE_TOO_LARGE'
+  | 'IMAGE_NO_FILES'
+  | 'FREEDRAW_TOO_SHORT'
+  | 'FREEDRAW_DISABLED'
+  | 'IMAGE_DISABLED'
+  | 'FRAME_DISABLED'
+  | 'TYPE_UNSUPPORTED'
+  | 'MAPPED_ITEM_MISSING_UPDATE'
+  | 'MAPPING_MISSING_UPDATE';
+
+export interface SkippedElement {
+  id: string;
+  type: string;
+  code: SkipCode;
+  reason: string;
+  remediation: string;
+}
+
+export const SKIP_REMEDIATION: Record<SkipCode, string> = {
+  CONNECTOR_SELF_REF: 'Rebind one connector endpoint in Excalidraw.',
+  CONNECTOR_NO_TARGET: 'Move endpoint(s) closer to shapes or increase --snap-threshold.',
+  CONNECTOR_INVALID: 'Ensure connector has at least two points and valid bindings.',
+  CONNECTOR_DISABLED: 'Re-run without --no-connectors.',
+  IMAGE_NOT_FOUND: 'Re-save the image in Excalidraw so embedded data is included.',
+  IMAGE_NOT_SAVED: 'Set image status to "saved" in Excalidraw and export again.',
+  IMAGE_TOO_LARGE: 'Resize or compress the image below 6 MB.',
+  IMAGE_NO_FILES: 'Export with embedded files/data included.',
+  FREEDRAW_TOO_SHORT: 'Redraw the stroke with at least two points.',
+  FREEDRAW_DISABLED: 'Re-run without --no-freedraw or --skip-freedraw.',
+  IMAGE_DISABLED: 'Re-run without --no-images.',
+  FRAME_DISABLED: 'Re-run without --no-frames.',
+  TYPE_UNSUPPORTED: 'No automatic remediation available for this element type.',
+  MAPPED_ITEM_MISSING_UPDATE: 'Re-run in upsert mode or regenerate mapping file.',
+  MAPPING_MISSING_UPDATE: 'Provide a mapping file or switch import mode to create/upsert.',
+};
+
 /**
  * Mapping between Excalidraw element IDs and created Miro item IDs
  */
@@ -28,13 +71,10 @@ export interface ConversionResult {
   itemsCreated: number;
   connectorsCreated: number;
   framesCreated: number;
+  groupsCreated: number;
   imagesCreated: number;
   freedrawConverted: number;
-  skippedElements: Array<{
-    id: string;
-    type: string;
-    reason: string;
-  }>;
+  skippedElements: SkippedElement[];
   idMap: IdMap;
   errors: string[];
   cleanupSuggestions: CleanupSuggestion[];
@@ -79,7 +119,9 @@ export interface PreviewElement {
   type: string;
   status: 'will_create' | 'will_skip' | 'degraded';
   miroType: string;
+  code?: SkipCode;
   reason?: string;
+  remediation?: string;
   fidelityNote?: string;
 }
 
@@ -96,6 +138,7 @@ export interface PreviewResult {
     images: number;
     freedraw: number;
     frames: number;
+    groups: number;
   };
 }
 
